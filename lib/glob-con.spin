@@ -163,6 +163,13 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_rtcPauseForSec                                'Pauses execution for a number of seconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of seconds to pause for between 0 and 2,147,483,647.
         a_rtcPauseForMSec '58                           'Pauses execution for a number of milliseconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of milliseconds to pause for between 0 and 2,147,483,647.
 
+'       ----------------------------------------------  NET-FUNKTIONEN
+#71,    a_lanStart                                      'Start Network
+        a_lanStop                                       'Stop Network
+        a_lanFTPOpen                                    'FTP-Verbindung öffnen
+        a_lanFTPClose                                   'FTP-Verbindung schließen
+        a_lanFTPNextFile                                'Verzeichniseintrag lesen
+
 '       ----------------------------------------------  CHIP-MANAGMENT
 #92,    a_mgrSetSound                                   'soundsubsysteme verwalten
         a_mgrGetSpec                                    'spezifikation abfragen

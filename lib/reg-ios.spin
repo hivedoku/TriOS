@@ -1026,7 +1026,21 @@ PUB pauseForMilliseconds(number)                        'Pauses execution for a 
   return bus_getlong1
 
 
+CON ''------------------------------------------------- LAN_LAUFWERKSFUNKTIONEN
 
+PUB lanstart                                            'LAN starten
+''funktionsgruppe               : lan
+''funktion                      : TCP-Netzwerk starten
+''busprotokoll                  : -
+
+  bus_putchar1(gc#a_lanStart)
+
+PUB lanstop                                             'LAN beenden
+''funktionsgruppe               : lan
+''funktion                      : TCP-Netzwerk beenden
+''busprotokoll                  : -
+
+  bus_putchar1(gc#a_lanStop)
 
 CON ''------------------------------------------------- Hydra Sound System
 
