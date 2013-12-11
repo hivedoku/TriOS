@@ -164,6 +164,10 @@ CNT_HBEAT    = 5_000_0000                               'blinkgeschw. front-led
 
 MPLEN        = 12000                                    'größe des hss-musikpuffers
 
+'Netzwerk-Puffergrößen (müssen Vielfaches von 2 sein!)
+rxlen        = 2048
+txlen        = 128
+
 'index für dmarker
 #0,     RMARKER                 'root
         SMARKER                 'system
@@ -172,12 +176,30 @@ MPLEN        = 12000                                    'größe des hss-musikpu
         BMARKER
         CMARKER
 
+CON 'Signaldefinitionen --------------------------------------------------------------------------
+
+'signaldefinitionen administra (todo: nach glob-con.spin auslagern!!!)
+
+#14,     A_NETCS,A_NETSCK,A_NETSI,A_NETSO              'Pins zum ENC28J60
+
+CON 'NVRAM Konstanten --------------------------------------------------------------------------
+
+' todo: nach glob-con.spin auslagern!!!
+
+#4,     NVRAM_IPADDR
+#8,     NVRAM_IPMASK
+#12,    NVRAM_IPGW
+#16,    NVRAM_IPDNS
+#20,    NVRAM_IPBOOT
+#24,    NVRAM_HIVE       ' 4 Bytes
+
 OBJ
   sdfat           : "adm-fat"        'fatengine
   rtc             : "adm-rtc"        'RTC-Engine
   com             : "adm-com"        'serielle schnittstelle
-  lan             : "driver_socket"  'LAN
+  sock            : "driver_socket"  'LAN
   gc              : "glob-con"       'globale konstanten
+  num             : "glob-numbers"   'Number Engine
 
 VAR
 
@@ -185,6 +207,10 @@ VAR
   byte  tbuf[20]                                        'stringpuffer
   byte  tbuf2[20]
   long  com_baud
+  byte  bufrxconn[rxlen]                                'LAN Empfangspuffer ausgehende Verbindung
+  byte  buftxconn[txlen]                                'LAN Sendepuffer ausgehende Verbindung
+  byte  bufrxlist[rxlen]                                'LAN Empfangspuffer eingehende Verbindung
+  byte  buftxlist[txlen]                                'LAN Sendepuffer eingehende Verbindung
 
 CON ''------------------------------------------------- ADMINISTRA
 
@@ -1090,22 +1116,102 @@ PRI rtc_pauseForMilliseconds                            'rtc: Pauses execution f
 
 CON ''------------------------------------------------- LAN-FUNKTIONEN
 
-PRI lan_start
+PRI lan_start | hiveid, hivestr, strpos, macpos
+''funktionsgruppe               : lan
+''funktion                      : Netzwerk starten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [071]
 
+  ip_addr := rtc.getNVSRAM(NVRAM_IPADDR)
+  ip_addr[1] := rtc.getNVSRAM(NVRAM_IPADDR+1)
+  ip_addr[2] := rtc.getNVSRAM(NVRAM_IPADDR+2)
+  ip_addr[3] := rtc.getNVSRAM(NVRAM_IPADDR+3)
+
+  ip_subnet := rtc.getNVSRAM(NVRAM_IPMASK)
+  ip_subnet[1] := rtc.getNVSRAM(NVRAM_IPMASK+1)
+  ip_subnet[2] := rtc.getNVSRAM(NVRAM_IPMASK+2)
+  ip_subnet[3] := rtc.getNVSRAM(NVRAM_IPMASK+3)
+
+  ip_gateway := rtc.getNVSRAM(NVRAM_IPGW)
+  ip_gateway[1] := rtc.getNVSRAM(NVRAM_IPGW+1)
+  ip_gateway[2] := rtc.getNVSRAM(NVRAM_IPGW+2)
+  ip_gateway[3] := rtc.getNVSRAM(NVRAM_IPGW+3)
+
+  ip_dns := rtc.getNVSRAM(NVRAM_IPDNS)
+  ip_dns[1] := rtc.getNVSRAM(NVRAM_IPDNS+1)
+  ip_dns[2] := rtc.getNVSRAM(NVRAM_IPDNS+2)
+  ip_dns[3] := rtc.getNVSRAM(NVRAM_IPDNS+3)
+
+  hiveid :=          rtc.getNVSRAM(NVRAM_HIVE)
+  hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+1) << 8
+  hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+2) << 16
+  hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+3) << 24
+  hivestr := num.ToStr(hiveid, num#DEC)
+  strpos := strsize(hivestr)
+  macpos := 5
+  repeat while (strpos AND macpos)
+    strpos--
+    if(strpos)
+      strpos--
+    mac_addr[macpos] := num.FromStr(hivestr+strpos, num#HEX)
+    byte[hivestr+strpos] := 0
+    macpos--
+
+  sock.start(A_NETCS,A_NETSCK,A_NETSI,A_NETSO, -1, @mac_addr, @ip_addr)
 
 
 PRI lan_stop
+''funktionsgruppe               : lan
+''funktion                      : Netzwerk anhalten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [072]
+
+  sock.stop
+
+PRI lan_connect | ipaddr, remoteport, handle
+''funktionsgruppe               : lan
+''funktion                      : ausgehende TCP-Verbindung öffnen (mit Server verbinden)
+''                              : Da hier feste Puffer (bufrxconn,buftxconn) verwendet werden,
+''                              : darf diese Funktion nur einmal aufgerufen werden
+''                              : (driver_socket.spin handelt per default bis 4 Sockets)
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [073][sub_getlong.ipaddr][sub_getword.remoteport][put.handle]
+''                              : ipaddr     - ipv4 address packed into a long (ie: 1.2.3.4 => $01_02_03_04)
+''                              : remoteport - port number to connect to
+''                              : handle     - lfd. Nr. der Verbindung
+
+  {if sock.isValidHandle(handle)
+    close}
+
+  ipaddr := sub_getlong
+  remoteport := sub_getword
+
+  handle := sock.connect(ipaddr, remoteport, @bufrxconn, rxlen, @buftxconn, txlen)
+
+  bus_putchar(handle)                                      'handle senden
 
 
-
-PRI lan_connect
 PRI lan_listen
 PRI lan_relisten
 PRI lan_isconnected
 PRI lan_rxcount
 PRI lan_resetbuffers
 PRI lan_waitconntimeout
-PRI lan_close
+PRI lan_close | handle
+''funktionsgruppe               : lan
+''funktion                      : TCP-Verbindung (ein- oder ausgehend) schließen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [080][get.handle]
+''                              : handle     - lfd. Nr. der zu schließenden Verbindung
+
+  handle := bus_getchar
+
+  sock.close(handle)
+
 PRI lan_rxflush
 PRI lan_rxcheck
 PRI lan_rxtime
@@ -1116,6 +1222,15 @@ PRI lan_txflush
 PRI lan_txcheck
 PRI lan_tx
 PRI lan_txdata
+
+DAT
+                long                                    ' long alignment for addresses
+  ip_addr       byte    10,  1, 1, 1                    'ip
+  ip_subnet     byte    255, 255, 255, 0                'subnet-maske
+  ip_gateway    byte    10,  1, 1, 254                  'gateway
+  ip_dns        byte    10,  1, 1, 254                  'dns
+  ip_boot       long    0                               'boot-server (IP address in long)
+  mac_addr      byte    $c0, $de, $ba, $be, $00, $00    'mac-adresse
 
 DAT                                                     'dummyroutine für getcogs
                         org

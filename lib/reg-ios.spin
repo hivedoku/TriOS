@@ -1030,17 +1030,67 @@ CON ''------------------------------------------------- LAN_FUNKTIONEN
 
 PUB lanstart                                            'LAN starten
 ''funktionsgruppe               : lan
-''funktion                      : TCP-Netzwerk starten
-''busprotokoll                  : -
+''funktion                      : Netzwerk starten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [071]
 
   bus_putchar1(gc#a_lanStart)
 
 PUB lanstop                                             'LAN beenden
 ''funktionsgruppe               : lan
-''funktion                      : TCP-Netzwerk beenden
-''busprotokoll                  : -
+''funktion                      : Netzwerk anhalten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [072]
 
   bus_putchar1(gc#a_lanStop)
+
+PUB lan_connect(ipaddr, remoteport): handle
+''funktionsgruppe               : lan
+''funktion                      : ausgehende TCP-Verbindung öffnen (mit Server verbinden)
+''                              : Da hier feste Puffer (bufrxconn,buftxconn) verwendet werden,
+''                              : darf diese Funktion nur einmal aufgerufen werden
+''                              : (driver_socket.spin handelt per default bis 4 Sockets)
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [073][sub_putlong.ipaddr][sub_putword.remoteport][get.handle]
+''                              : ipaddr     - ipv4 address packed into a long (ie: 1.2.3.4 => $01_02_03_04)
+''                              : remoteport - port number to connect to
+''                              : handle     - lfd. Nr. der Verbindung
+
+  bus_putchar1(gc#a_lanConnect)
+  bus_putlong1(ipaddr)
+  bus_putword1(remoteport)
+  handle := bus_getchar1
+
+PUB lan_listen
+PUB lan_relisten
+PUB lan_isconnected
+PUB lan_rxcount
+PUB lan_resetbuffers
+PUB lan_waitconntimeout
+PUB lan_close(handle)
+''funktionsgruppe               : lan
+''funktion                      : TCP-Verbindung (ein- oder ausgehend) schließen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [080][put.handle]
+''                              : handle     - lfd. Nr. der zu schließenden Verbindung
+
+  bus_putchar1(gc#a_lanClose)
+  bus_putchar1(handle)
+
+PUB lan_rxflush
+PUB lan_rxcheck
+PUB lan_rxtime
+PUB lan_rxbyte
+PUB lan_rxdatatime
+PUB lan_rxdata
+PUB lan_txflush
+PUB lan_txcheck
+PUB lan_tx
+PUB lan_txdata
 
 CON ''------------------------------------------------- Hydra Sound System
 
