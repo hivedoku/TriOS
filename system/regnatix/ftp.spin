@@ -50,8 +50,6 @@ byte    handle_data                'Handle FTP Data Verbindung
 
 PUB main
 
-  ip_addr := 0
-
   ios.start                                             'ios initialisieren
   ios.printnl
   ios.parastart                                         'parameterübergabe starten
@@ -59,11 +57,11 @@ PUB main
     if byte[@parastr][0] == "/"                         'option?
       case byte[@parastr][1]
         "?": ios.print(@help)
-        "a": if ios.paranext(@parastr)
+        "s": if ios.paranext(@parastr)
                setaddr(@parastr)
         other: ios.print(@help)
 
-  if (ip_addr)  ' Adresse nicht 0
+  if (ip_addr)  ' Adresse nicht 0.0.0.0
     ios.lanstart
     handle_control := ios.lan_connect(ip_addr, 21)
     ios.printnl
@@ -76,14 +74,15 @@ PUB main
 
 PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable schreiben
 
-  count := 0
+  ip_addr := 0
+  count := 3
   repeat while ipaddr
     pos := str.findCharacter(ipaddr, ".")
     if(pos)
       byte[pos++] := 0
-    ip_addr[count++] := num.FromStr(ipaddr, num#DEC)
+    ip_addr += num.FromStr(ipaddr, num#DEC) << (8*count--)
     ipaddr := pos
-    if(count == 4)
+    if(count == -1)
       quit
 
 DAT                                                     'sys: helptext
