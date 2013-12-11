@@ -50,6 +50,8 @@ byte    handle_data                'Handle FTP Data Verbindung
 
 PUB main
 
+  ip_addr := 0
+
   ios.start                                             'ios initialisieren
   ios.printnl
   ios.parastart                                         'parameterübergabe starten
@@ -74,7 +76,6 @@ PUB main
 
 PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable schreiben
 
-  ip_addr := 0
   count := 3
   repeat while ipaddr
     pos := str.findCharacter(ipaddr, ".")
