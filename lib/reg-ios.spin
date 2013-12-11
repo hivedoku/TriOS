@@ -1026,7 +1026,7 @@ PUB pauseForMilliseconds(number)                        'Pauses execution for a 
   return bus_getlong1
 
 
-CON ''------------------------------------------------- LAN_LAUFWERKSFUNKTIONEN
+CON ''------------------------------------------------- LAN_FUNKTIONEN
 
 PUB lanstart                                            'LAN starten
 ''funktionsgruppe               : lan

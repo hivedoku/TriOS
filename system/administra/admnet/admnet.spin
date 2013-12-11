@@ -176,7 +176,7 @@ OBJ
   sdfat           : "adm-fat"        'fatengine
   rtc             : "adm-rtc"        'RTC-Engine
   com             : "adm-com"        'serielle schnittstelle
-  lan             : "adm-lan"        'LAN
+  lan             : "driver_socket"  'LAN
   gc              : "glob-con"       'globale konstanten
 
 VAR
@@ -260,11 +260,25 @@ PUB main | cmd,err                                      'chip: kommandointerpret
 
 '       ----------------------------------------------  LAN-FUNKTIONEN
         gc#a_lanStart: lan_start                        'Start Network
-        gc#a_lanStop: lan_stop                          'Stop Network
-        gc#a_lanFTPOpen: lan_ftpOpen                    'FTP-Verbindung öffnen
-        gc#a_lanFTPClose: lan_ftpClose                  'FTP-Verbindung schließen
-        gc#a_lanFTPNextFile: lan_ftpNextFile            'Verzeichniseintrag lesen
-
+        gc#a_lanStop:lan_stop                           'Stop Network
+        gc#a_lanConnect: lan_connect                    'ausgehende TCP-Verbindung öffnen
+        gc#a_lanListen: lan_listen                      'auf eingehende TCP-Verbindung lauschen
+        gc#a_lanReListen: lan_relisten                  'wieder auf eingehende TCP-Verbindung lauschen
+        gc#a_lanIsConnected: lan_isconnected            'Prüfen, ob verbunden
+        gc#a_lanRXCount: lan_rxcount                    'Anzahl Zeichen im Empfangspuffer
+        gc#a_lanResetBuffers: lan_resetbuffers          'Puffer zurücksetzen
+        gc#a_lanWaitConnectTimeout: lan_waitconntimeout 'bestimmte Zeit auf Verbindung warten
+        gc#a_lanClose: lan_close                        'TCP-Verbindung schließen
+        gc#a_lanRXFlush: lan_rxflush                    'Empfangspuffer leeren
+        gc#a_lanRXCheck: lan_rxcheck                    'warten auf Byte aus Empfangspuffer
+        gc#a_lanRXTime: lan_rxtime                      'bestimmte Zeit warten auf Byte aus Empfangspuffer
+        gc#a_lanRXByte: lan_rxbyte                      'Byte aus Empfangspuffer lesen
+        gc#a_lanRXDataTime: lan_rxdatatime              'bestimmte Zeit auf daten aus Empfangspuffer warten
+        gc#a_lanRXData: lan_rxdata                      'Daten aus Empfangspuffer lesen
+        gc#a_lanTXFlush: lan_txflush                    'Sendepuffer leeren
+        gc#a_lanTXCheck: lan_txcheck                    'Verbindung prüfen und Byte senden
+        gc#a_lanTX: lan_tx                              'Byte senden
+        gc#a_lanTXData: lan_txdata                      'Daten senden
 
 '       ----------------------------------------------  CHIP-MANAGMENT
         gc#a_mgrGetSpec: mgr_getspec                    'spezifikation abfragen
@@ -307,9 +321,9 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
   com_baud := 115200
   com.start(gc#SER_RX,gc#SER_TX,0,com_baud)             ' start the default serial interface
 
-  'Netz starten
-  lan.start
-  lan.ftpBoot
+''  'Netz starten
+''  lan.start
+''  lan.ftpBoot
 
 PRI bus_putchar(zeichen)                                'chip: ein byte über bus ausgeben
 ''funktionsgruppe               : chip
@@ -1074,42 +1088,34 @@ PRI rtc_pauseForMilliseconds                            'rtc: Pauses execution f
 ''                              : Returns a puesdo random value derived from the current clock frequency and the time when called.
   sub_putlong(rtc.pauseForMilliseconds(sub_getlong))
 
-CON ''------------------------------------------------- NET-FUNKTIONEN
+CON ''------------------------------------------------- LAN-FUNKTIONEN
 
 PRI lan_start
 
-  lan.start
+
 
 PRI lan_stop
 
-  lan.stop
 
-PRI lan_ftpOpen | addr
 
-  addr := sub_getlong
-  lan.ftpOpen(addr)
-
-PRI lan_ftpClose
-
-  lan.ftpClose
-
-PRI lan_ftpNextFile | strpt                                 'ftp: nächsten eintrag aus verzeichnis holen
-''funktionsgruppe               : lan - ftp
-''funktion                      : nächsten eintrag aus verzeichnis holen
-''eingabe                       : -
-''ausgabe                       : -
-''busprotokoll                  : [003][put.status=0]
-''                              : [003][put.status=1][sub_putstr.fn]
-''                              : status - 1 = gültiger eintrag
-''                              :          0 = es folgt kein eintrag mehr
-''                              : fn - verzeichniseintrag string
-
-  strpt := \lan.ftpListName                              'nächsten eintrag holen
-  if strpt                                              'status senden
-    bus_putchar(1)                                      'kein eintrag mehr
-    sub_putstr(strpt)
-  else
-    bus_putchar(0)                                      'gültiger eintrag folgt
+PRI lan_connect
+PRI lan_listen
+PRI lan_relisten
+PRI lan_isconnected
+PRI lan_rxcount
+PRI lan_resetbuffers
+PRI lan_waitconntimeout
+PRI lan_close
+PRI lan_rxflush
+PRI lan_rxcheck
+PRI lan_rxtime
+PRI lan_rxbyte
+PRI lan_rxdatatime
+PRI lan_rxdata
+PRI lan_txflush
+PRI lan_txcheck
+PRI lan_tx
+PRI lan_txdata
 
 DAT                                                     'dummyroutine für getcogs
                         org
