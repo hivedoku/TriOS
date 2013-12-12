@@ -207,6 +207,7 @@ VAR
   byte  tbuf[20]                                        'stringpuffer
   byte  tbuf2[20]
   long  com_baud
+  byte  lan_started                                     'LAN gestartet?
   byte  bufrxconn[rxlen]                                'LAN Empfangspuffer ausgehende Verbindung
   byte  buftxconn[txlen]                                'LAN Sendepuffer ausgehende Verbindung
   byte  bufrxlist[rxlen]                                'LAN Empfangspuffer eingehende Verbindung
@@ -293,7 +294,7 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_lanIsConnected: lan_isconnected            'Prüfen, ob verbunden
         gc#a_lanRXCount: lan_rxcount                    'Anzahl Zeichen im Empfangspuffer
         gc#a_lanResetBuffers: lan_resetbuffers          'Puffer zurücksetzen
-        gc#a_lanWaitConnectTimeout: lan_waitconntimeout 'bestimmte Zeit auf Verbindung warten
+        gc#a_lanWaitConnTimeout: lan_waitconntimeout    'bestimmte Zeit auf Verbindung warten
         gc#a_lanClose: lan_close                        'TCP-Verbindung schließen
         gc#a_lanRXFlush: lan_rxflush                    'Empfangspuffer leeren
         gc#a_lanRXCheck: lan_rxcheck                    'warten auf Byte aus Empfangspuffer
@@ -345,11 +346,10 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
 
   'serielle schnittstelle starten
   com_baud := 115200
-  com.start(gc#SER_RX,gc#SER_TX,0,com_baud)             ' start the default serial interface
+  com.start(gc#SER_RX,gc#SER_TX,0,com_baud)             'start the default serial interface
 
-''  'Netz starten
-''  lan.start
-''  lan.ftpBoot
+  'LAN
+  lan_started := false                                  'LAN noch nicht gestartet
 
 PRI bus_putchar(zeichen)                                'chip: ein byte über bus ausgeben
 ''funktionsgruppe               : chip
@@ -1123,42 +1123,44 @@ PRI lan_start | hiveid, hivestr, strpos, macpos
 ''ausgabe                       : -
 ''busprotokoll                  : [071]
 
-  ip_addr := rtc.getNVSRAM(NVRAM_IPADDR)
-  ip_addr[1] := rtc.getNVSRAM(NVRAM_IPADDR+1)
-  ip_addr[2] := rtc.getNVSRAM(NVRAM_IPADDR+2)
-  ip_addr[3] := rtc.getNVSRAM(NVRAM_IPADDR+3)
+  if (not lan_started)
+    ip_addr := rtc.getNVSRAM(NVRAM_IPADDR)
+    ip_addr[1] := rtc.getNVSRAM(NVRAM_IPADDR+1)
+    ip_addr[2] := rtc.getNVSRAM(NVRAM_IPADDR+2)
+    ip_addr[3] := rtc.getNVSRAM(NVRAM_IPADDR+3)
 
-  ip_subnet := rtc.getNVSRAM(NVRAM_IPMASK)
-  ip_subnet[1] := rtc.getNVSRAM(NVRAM_IPMASK+1)
-  ip_subnet[2] := rtc.getNVSRAM(NVRAM_IPMASK+2)
-  ip_subnet[3] := rtc.getNVSRAM(NVRAM_IPMASK+3)
+    ip_subnet := rtc.getNVSRAM(NVRAM_IPMASK)
+    ip_subnet[1] := rtc.getNVSRAM(NVRAM_IPMASK+1)
+    ip_subnet[2] := rtc.getNVSRAM(NVRAM_IPMASK+2)
+    ip_subnet[3] := rtc.getNVSRAM(NVRAM_IPMASK+3)
 
-  ip_gateway := rtc.getNVSRAM(NVRAM_IPGW)
-  ip_gateway[1] := rtc.getNVSRAM(NVRAM_IPGW+1)
-  ip_gateway[2] := rtc.getNVSRAM(NVRAM_IPGW+2)
-  ip_gateway[3] := rtc.getNVSRAM(NVRAM_IPGW+3)
+    ip_gateway := rtc.getNVSRAM(NVRAM_IPGW)
+    ip_gateway[1] := rtc.getNVSRAM(NVRAM_IPGW+1)
+    ip_gateway[2] := rtc.getNVSRAM(NVRAM_IPGW+2)
+    ip_gateway[3] := rtc.getNVSRAM(NVRAM_IPGW+3)
 
-  ip_dns := rtc.getNVSRAM(NVRAM_IPDNS)
-  ip_dns[1] := rtc.getNVSRAM(NVRAM_IPDNS+1)
-  ip_dns[2] := rtc.getNVSRAM(NVRAM_IPDNS+2)
-  ip_dns[3] := rtc.getNVSRAM(NVRAM_IPDNS+3)
+    ip_dns := rtc.getNVSRAM(NVRAM_IPDNS)
+    ip_dns[1] := rtc.getNVSRAM(NVRAM_IPDNS+1)
+    ip_dns[2] := rtc.getNVSRAM(NVRAM_IPDNS+2)
+    ip_dns[3] := rtc.getNVSRAM(NVRAM_IPDNS+3)
 
-  hiveid :=          rtc.getNVSRAM(NVRAM_HIVE)
-  hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+1) << 8
-  hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+2) << 16
-  hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+3) << 24
-  hivestr := num.ToStr(hiveid, num#DEC)
-  strpos := strsize(hivestr)
-  macpos := 5
-  repeat while (strpos AND macpos)
-    strpos--
-    if(strpos)
+    hiveid :=          rtc.getNVSRAM(NVRAM_HIVE)
+    hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+1) << 8
+    hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+2) << 16
+    hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+3) << 24
+    hivestr := num.ToStr(hiveid, num#DEC)
+    strpos := strsize(hivestr)
+    macpos := 5
+    repeat while (strpos AND macpos)
       strpos--
-    mac_addr[macpos] := num.FromStr(hivestr+strpos, num#HEX)
-    byte[hivestr+strpos] := 0
-    macpos--
+      if(strpos)
+        strpos--
+      mac_addr[macpos] := num.FromStr(hivestr+strpos, num#HEX)
+      byte[hivestr+strpos] := 0
+      macpos--
 
-  sock.start(A_NETCS,A_NETSCK,A_NETSI,A_NETSO, -1, @mac_addr, @ip_addr)
+    sock.start(A_NETCS,A_NETSCK,A_NETSI,A_NETSO, -1, @mac_addr, @ip_addr)
+    lan_started := true
 
 
 PRI lan_stop
@@ -1168,7 +1170,9 @@ PRI lan_stop
 ''ausgabe                       : -
 ''busprotokoll                  : [072]
 
-  sock.stop
+  if lan_started
+    sock.stop
+    lan_started := false
 
 PRI lan_connect | ipaddr, remoteport, handle
 ''funktionsgruppe               : lan
@@ -1183,9 +1187,6 @@ PRI lan_connect | ipaddr, remoteport, handle
 ''                              : remoteport - port number to connect to
 ''                              : handle     - lfd. Nr. der Verbindung
 
-  {if sock.isValidHandle(handle)
-    close}
-
   ipaddr := sub_getlong
   remoteport := sub_getword
 
@@ -1196,30 +1197,121 @@ PRI lan_connect | ipaddr, remoteport, handle
 
 PRI lan_listen
 PRI lan_relisten
-PRI lan_isconnected
+PRI lan_isconnected | handle
+''funktionsgruppe               : lan
+''funktion                      : Abfrage, ob Socket verbunden
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [076][get.handle][put.connected]
+''                              : handle     - lfd. Nr. der zu testenden Verbindung
+''                              : connected  - True, if connected
+
+  handle := bus_getchar
+
+  bus_putchar(sock.isConnected(handle))
+
 PRI lan_rxcount
 PRI lan_resetbuffers
-PRI lan_waitconntimeout
+PRI lan_waitconntimeout | handle, timeout, t, connected
+''funktionsgruppe               : lan
+''funktion                      : bestimmte Zeit auf Verbindung warten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [079][get.handle][sub_getword.timeout][put.connected]
+''                              : handle     - lfd. Nr. der zu testenden Verbindung
+''                              : timeout    - Timeout in Millisekunden
+''                              : connected  - True, if connected
+
+  handle := bus_getchar
+  timeout := sub_getword
+
+  t := cnt
+  repeat until (connected := sock.isConnected(handle)) or (((cnt - t) / (clkfreq / 1000)) > timeout)
+
+  bus_putchar(connected)
+
 PRI lan_close | handle
 ''funktionsgruppe               : lan
 ''funktion                      : TCP-Verbindung (ein- oder ausgehend) schließen
 ''eingabe                       : -
 ''ausgabe                       : -
 ''busprotokoll                  : [080][get.handle]
-''                              : handle     - lfd. Nr. der zu schließenden Verbindung
+''                              : handle - lfd. Nr. der zu schließenden Verbindung
 
   handle := bus_getchar
 
   sock.close(handle)
 
 PRI lan_rxflush
-PRI lan_rxcheck
-PRI lan_rxtime
+PRI lan_rxcheck | handle, rxbyte
+''funktionsgruppe               : lan
+''funktion                      : ASCII-Zeichen lesen, wenn vorhanden
+''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) empfangen wird
+''                              : (vor allem nicht, wenn -1 und -3 enthalten sein können)
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [082][get.handle][put.rxbyte]
+''                              : handle  - lfd. Nr. der Verbindung
+''                              : rxbyte  - empfangenes Zeichen (0 - 127) oder
+''                              :           sock#RETBUFFEREMPTY (-1) wenn Puffer leer
+''                              :           sock#ERRSOCKETCLOSED (-3) wenn keine Verbindung mehr
+
+  handle := bus_getchar
+
+  rxbyte := sock.readByteNonBlocking(handle)
+  if (not sock.isConnected(handle)) and (rxbyte == -1)
+    rxbyte := sock#ERRSOCKETCLOSED
+
+  bus_putchar(rxbyte)
+
+PRI lan_rxtime | handle, timeout, t, rxbyte
+''funktionsgruppe               : lan
+''funktion                      : angegebene Zeit auf ASCII-Zeichen warten
+''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) empfangen wird
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [083][get.handle][sub_getword.timeout][put.rxbyte]
+''                              : handle  - lfd. Nr. der Verbindung
+''                              : timeout - Timeout in Millisekunden
+''                              : rxbyte  - empfangenes Zeichen (0 - 127) oder
+''                              :           sock#RETBUFFEREMPTY (-1) wenn Timeout oder keine Verbindung mehr
+
+  handle := bus_getchar
+  timeout := sub_getword
+
+  t := cnt
+  repeat until (rxbyte := sock.readByteNonBlocking(handle)) => 0 or (not sock.isConnected(handle)) or (cnt - t) / (clkfreq / 1000) > timeout
+
+  bus_putchar(rxbyte)
+
 PRI lan_rxbyte
 PRI lan_rxdatatime
 PRI lan_rxdata
 PRI lan_txflush
-PRI lan_txcheck
+PRI lan_txcheck | handle, txbyte
+''funktionsgruppe               : lan
+''funktion                      : bei bestehender Verbindung ein ASCII-Zeichen zu senden
+''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) gesendet wird
+''                              : (vor allem nicht, wenn -1 enthalten sein kann)
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [088][get.handle][get.tybyte][put.error]
+''                              : handle - lfd. Nr. der Verbindung
+''                              : txbyte - zu sendendes Zeichen
+''                              : error  - ungleich Null bei Fehler
+
+  handle := bus_getchar
+  txbyte := bus_getchar
+
+  ifnot sock.isConnected(handle)
+    bus_putchar(sock#ERRSOCKETCLOSED)
+
+  if (sock.writeByteNonBlocking(handle, txbyte) == txbyte)
+    bus_putchar(0)
+  else
+    bus_putchar(sock#RETBUFFERFULL)
+
+
 PRI lan_tx
 PRI lan_txdata
 

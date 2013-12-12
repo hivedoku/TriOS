@@ -172,7 +172,7 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_lanIsConnected                                'Prüfen, ob verbunden
         a_lanRXCount                                    'Anzahl Zeichen im Empfangspuffer
         a_lanResetBuffers                               'Puffer zurücksetzen
-        a_lanWaitConnectTimeout                         'bestimmte Zeit auf Verbindung warten
+        a_lanWaitConnTimeout                            'bestimmte Zeit auf Verbindung warten
         a_lanClose                                      'TCP-Verbindung schließen
         a_lanRXFlush                                    'Empfangspuffer leeren
         a_lanRXCheck                                    'warten auf Byte aus Empfangspuffer

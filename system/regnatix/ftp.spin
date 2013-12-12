@@ -42,11 +42,12 @@ _XINFREQ     = 5_000_000
 
 VAR
 
-long    ip_addr
-byte    parastr[64]
-byte    addrset
-byte    handle_control             'Handle FTP Control Verbindung
-byte    handle_data                'Handle FTP Data Verbindung
+  long    ip_addr
+  byte    parastr[64]
+  byte    strTemp[128]
+  byte    addrset
+  byte    handle_control             'Handle FTP Control Verbindung
+  byte    handle_data                'Handle FTP Data Verbindung
 
 PUB main
 
@@ -70,6 +71,24 @@ PUB main
     ios.print(string("Handle Connect: "))
     ios.print(num.ToStr(handle_control, num#DEC))
     ios.printnl
+    if (ios.lan_waitconntimeout(handle_control, 1500))
+      ios.print(string("Verbindung mit FTP-Server hergestellt."))
+      ios.printnl
+      if getResponse(string("220 "))
+        if sendStr(handle_control, string("USER anonymous",13,10))
+          getResponse(string("230 "))
+        else
+        ios.print(string("Fehler beim Senden des Usernamens"))
+        ios.printnl
+      else
+        ios.print(string("Antwort falsch."))
+        ios.printnl
+    else
+      ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden."))
+      ios.printnl
+
+
+
     ios.lan_close(handle_control)
 
  ios.stop
@@ -85,6 +104,48 @@ PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable 
     ipaddr := pos
     if(count == -1)
       quit
+
+PRI getResponse (strOk) : respOk | len
+
+  respOk := FALSE
+
+  repeat
+    readLine
+    if strsize(@strTemp) == 0
+      quit
+    ios.print(string("Antwort: "))
+    ios.print(strTemp)
+    ios.printnl
+    'byte[@strTemp+strsize(strOk)] := 0
+    strTemp[strsize(strOk)] := 0
+    if strcomp(@strTemp, strOk)
+      respOk := TRUE
+      ios.print(string("Antwort korrekt."))
+      ios.printnl
+
+  return respOk
+
+PRI readLine | i, ch
+
+  repeat i from 0 to 126
+    ch := ios.lan_rxtime(handle_control, 500)
+    if ch == 13
+      ch := ios.lan_rxtime(handle_control, 500)
+    if ch == -1 or ch == 10
+      quit
+    strTemp[i] := ch
+
+  strTemp[i] := 0
+
+  return i
+
+PRI sendStr (handle, strSend) | i, err
+
+  repeat i from 0 to strsize(strSend)
+    if (err := ios.lan_txcheck(handle, strSend[i]))
+      quit
+
+  return err
 
 DAT                                                     'sys: helptext
 
