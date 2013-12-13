@@ -65,13 +65,19 @@ PUB main
         other: ios.print(@help)
 
   if (ip_addr)  ' Adresse nicht 0.0.0.0
-    ios.lanstart
-    handle_control := ios.lan_connect(ip_addr, 21)
+    ios.print(string("Starte LAN..."))
     ios.printnl
+    ios.lanstart
+    delay_ms(5000) 'nach ios.lanstart dauert es, bis der Stack funktioniert
+    ios.print(string("Verbinde mit FTP-Server..."))
+    ios.printnl
+    handle_control := ios.lan_connect(ip_addr, 21)
+    ios.lan_resetbuffers(handle_control)
     ios.print(string("Handle Connect: "))
     ios.print(num.ToStr(handle_control, num#DEC))
     ios.printnl
-    if (ios.lan_waitconntimeout(handle_control, 1500))
+    if (ios.lan_waitconntimeout(handle_control, 2000))
+      delay_ms(5000)
       ios.print(string("Verbindung mit FTP-Server hergestellt."))
       ios.printnl
       if getResponse(string("220 "))
@@ -92,6 +98,9 @@ PUB main
     ios.lan_close(handle_control)
 
  ios.stop
+
+PRI delay_ms(Duration)
+  waitcnt(((clkfreq / 1_000 * Duration - 3932)) + cnt)
 
 PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable schreiben
 

@@ -1080,7 +1080,17 @@ PUB lan_isconnected(handle): connected
   connected := bus_getchar1
 
 PUB lan_rxcount
-PUB lan_resetbuffers
+PUB lan_resetbuffers(handle)
+''funktionsgruppe               : lan
+''funktion                      : Sende- und Empfangspuffer zurücksetzen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [078][put.handle]
+''                              : handle - lfd. Nr. der Verbindung
+
+  bus_putchar1(gc#a_lanResetBuffers)
+  bus_putchar1(handle)
+
 PUB lan_waitconntimeout(handle, timeout): connected
 ''funktionsgruppe               : lan
 ''funktion                      : bestimmte Zeit auf Verbindung warten

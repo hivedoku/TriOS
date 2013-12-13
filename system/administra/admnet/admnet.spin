@@ -1211,7 +1211,18 @@ PRI lan_isconnected | handle
   bus_putchar(sock.isConnected(handle))
 
 PRI lan_rxcount
-PRI lan_resetbuffers
+PRI lan_resetbuffers | handle
+''funktionsgruppe               : lan
+''funktion                      : Sende- und Empfangspuffer zurücksetzen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [078][get.handle]
+''                              : handle - lfd. Nr. der Verbindung
+
+  handle := bus_getchar
+
+  sock.resetBuffers(handle)
+
 PRI lan_waitconntimeout | handle, timeout, t, connected
 ''funktionsgruppe               : lan
 ''funktion                      : bestimmte Zeit auf Verbindung warten
