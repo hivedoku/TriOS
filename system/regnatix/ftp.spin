@@ -46,8 +46,8 @@ VAR
   byte    parastr[64]
   byte    strTemp[128]
   byte    addrset
-  byte    handle_control             'Handle FTP Control Verbindung
-  byte    handle_data                'Handle FTP Data Verbindung
+  long    handle_control             'Handle FTP Control Verbindung
+  long    handle_data                'Handle FTP Data Verbindung
 
 PUB main
 
@@ -68,16 +68,15 @@ PUB main
     ios.print(string("Starte LAN..."))
     ios.printnl
     ios.lanstart
-    delay_ms(5000) 'nach ios.lanstart dauert es, bis der Stack funktioniert
+    delay_ms(1000) 'nach ios.lanstart dauert es, bis der Stack funktioniert
     ios.print(string("Verbinde mit FTP-Server..."))
     ios.printnl
     handle_control := ios.lan_connect(ip_addr, 21)
-    ios.lan_resetbuffers(handle_control)
+''    ios.lan_resetbuffers(handle_control)
     ios.print(string("Handle Connect: "))
-    ios.print(num.ToStr(handle_control, num#DEC))
+    ios.print(num.ToStr(handle_control, num#HEX))
     ios.printnl
     if (ios.lan_waitconntimeout(handle_control, 2000))
-      delay_ms(5000)
       ios.print(string("Verbindung mit FTP-Server hergestellt."))
       ios.printnl
       if getResponse(string("220 "))

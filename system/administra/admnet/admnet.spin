@@ -1182,7 +1182,7 @@ PRI lan_connect | ipaddr, remoteport, handle
 ''                              : (driver_socket.spin handelt per default bis 4 Sockets)
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [073][sub_getlong.ipaddr][sub_getword.remoteport][put.handle]
+''busprotokoll                  : [073][sub_getlong.ipaddr][sub_getword.remoteport][sub_putlong.handle]
 ''                              : ipaddr     - ipv4 address packed into a long (ie: 1.2.3.4 => $01_02_03_04)
 ''                              : remoteport - port number to connect to
 ''                              : handle     - lfd. Nr. der Verbindung
@@ -1192,7 +1192,7 @@ PRI lan_connect | ipaddr, remoteport, handle
 
   handle := sock.connect(ipaddr, remoteport, @bufrxconn, rxlen, @buftxconn, txlen)
 
-  bus_putchar(handle)                                      'handle senden
+  sub_putlong(handle)                                      'handle senden
 
 
 PRI lan_listen
@@ -1202,11 +1202,11 @@ PRI lan_isconnected | handle
 ''funktion                      : Abfrage, ob Socket verbunden
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [076][get.handle][put.connected]
+''busprotokoll                  : [076][sub_getlong.handle][put.connected]
 ''                              : handle     - lfd. Nr. der zu testenden Verbindung
 ''                              : connected  - True, if connected
 
-  handle := bus_getchar
+  handle := sub_getlong
 
   bus_putchar(sock.isConnected(handle))
 
@@ -1216,10 +1216,10 @@ PRI lan_resetbuffers | handle
 ''funktion                      : Sende- und Empfangspuffer zurücksetzen
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [078][get.handle]
+''busprotokoll                  : [078][sub_getlong.handle]
 ''                              : handle - lfd. Nr. der Verbindung
 
-  handle := bus_getchar
+  handle := sub_getlong
 
   sock.resetBuffers(handle)
 
@@ -1228,12 +1228,12 @@ PRI lan_waitconntimeout | handle, timeout, t, connected
 ''funktion                      : bestimmte Zeit auf Verbindung warten
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [079][get.handle][sub_getword.timeout][put.connected]
+''busprotokoll                  : [079][sub_getlong.handle][sub_getword.timeout][put.connected]
 ''                              : handle     - lfd. Nr. der zu testenden Verbindung
 ''                              : timeout    - Timeout in Millisekunden
 ''                              : connected  - True, if connected
 
-  handle := bus_getchar
+  handle := sub_getlong
   timeout := sub_getword
 
   t := cnt
@@ -1246,10 +1246,10 @@ PRI lan_close | handle
 ''funktion                      : TCP-Verbindung (ein- oder ausgehend) schließen
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [080][get.handle]
+''busprotokoll                  : [080][sub_getlong.handle]
 ''                              : handle - lfd. Nr. der zu schließenden Verbindung
 
-  handle := bus_getchar
+  handle := sub_getlong
 
   sock.close(handle)
 
@@ -1261,13 +1261,13 @@ PRI lan_rxcheck | handle, rxbyte
 ''                              : (vor allem nicht, wenn -1 und -3 enthalten sein können)
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [082][get.handle][put.rxbyte]
+''busprotokoll                  : [082][sub_getlong.handle][put.rxbyte]
 ''                              : handle  - lfd. Nr. der Verbindung
 ''                              : rxbyte  - empfangenes Zeichen (0 - 127) oder
 ''                              :           sock#RETBUFFEREMPTY (-1) wenn Puffer leer
 ''                              :           sock#ERRSOCKETCLOSED (-3) wenn keine Verbindung mehr
 
-  handle := bus_getchar
+  handle := sub_getlong
 
   rxbyte := sock.readByteNonBlocking(handle)
   if (not sock.isConnected(handle)) and (rxbyte == -1)
@@ -1281,13 +1281,13 @@ PRI lan_rxtime | handle, timeout, t, rxbyte
 ''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) empfangen wird
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [083][get.handle][sub_getword.timeout][put.rxbyte]
+''busprotokoll                  : [083][sub_getlong.handle][sub_getword.timeout][put.rxbyte]
 ''                              : handle  - lfd. Nr. der Verbindung
 ''                              : timeout - Timeout in Millisekunden
 ''                              : rxbyte  - empfangenes Zeichen (0 - 127) oder
 ''                              :           sock#RETBUFFEREMPTY (-1) wenn Timeout oder keine Verbindung mehr
 
-  handle := bus_getchar
+  handle := sub_getlong
   timeout := sub_getword
 
   t := cnt
@@ -1306,12 +1306,12 @@ PRI lan_txcheck | handle, txbyte
 ''                              : (vor allem nicht, wenn -1 enthalten sein kann)
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [088][get.handle][get.tybyte][put.error]
+''busprotokoll                  : [088][sub_getlong.handle][get.tybyte][put.error]
 ''                              : handle - lfd. Nr. der Verbindung
 ''                              : txbyte - zu sendendes Zeichen
 ''                              : error  - ungleich Null bei Fehler
 
-  handle := bus_getchar
+  handle := sub_getlong
   txbyte := bus_getchar
 
   ifnot sock.isConnected(handle)

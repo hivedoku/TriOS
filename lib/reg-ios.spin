@@ -1054,7 +1054,7 @@ PUB lan_connect(ipaddr, remoteport): handle
 ''                              : (driver_socket.spin handelt per default bis 4 Sockets)
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [073][sub_putlong.ipaddr][sub_putword.remoteport][get.handle]
+''busprotokoll                  : [073][sub_putlong.ipaddr][sub_putword.remoteport][sub_getlong.handle]
 ''                              : ipaddr     - ipv4 address packed into a long (ie: 1.2.3.4 => $01_02_03_04)
 ''                              : remoteport - port number to connect to
 ''                              : handle     - lfd. Nr. der Verbindung
@@ -1062,7 +1062,7 @@ PUB lan_connect(ipaddr, remoteport): handle
   bus_putchar1(gc#a_lanConnect)
   bus_putlong1(ipaddr)
   bus_putword1(remoteport)
-  handle := bus_getchar1
+  handle := bus_getlong1
 
 PUB lan_listen
 PUB lan_relisten
@@ -1071,12 +1071,12 @@ PUB lan_isconnected(handle): connected
 ''funktion                      : Abfrage, ob Socket verbunden
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [076][put.handle][get.connected]
+''busprotokoll                  : [076][sub_putlong.handle][get.connected]
 ''                              : handle     - lfd. Nr. der zu testenden Verbindung
 ''                              : connected  - True, if connected
 
   bus_putchar1(gc#a_lanIsConnected)
-  bus_putchar1(handle)
+  bus_putlong1(handle)
   connected := bus_getchar1
 
 PUB lan_rxcount
@@ -1085,24 +1085,24 @@ PUB lan_resetbuffers(handle)
 ''funktion                      : Sende- und Empfangspuffer zurücksetzen
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [078][put.handle]
+''busprotokoll                  : [078][sub_putlong.handle]
 ''                              : handle - lfd. Nr. der Verbindung
 
   bus_putchar1(gc#a_lanResetBuffers)
-  bus_putchar1(handle)
+  bus_putlong1(handle)
 
 PUB lan_waitconntimeout(handle, timeout): connected
 ''funktionsgruppe               : lan
 ''funktion                      : bestimmte Zeit auf Verbindung warten
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [079][put.handle][sub_putword.timeout][get.connected]
+''busprotokoll                  : [079][sub_putlong.handle][sub_putword.timeout][get.connected]
 ''                              : handle     - lfd. Nr. der zu testenden Verbindung
 ''                              : timeout    - Timeout in Millisekunden
 ''                              : connected  - True, if connected
 
   bus_putchar1(gc#a_lanWaitConnTimeout)
-  bus_putchar1(handle)
+  bus_putlong1(handle)
   bus_putword1(timeout)
   connected := bus_getchar1
 
@@ -1111,11 +1111,11 @@ PUB lan_close(handle)
 ''funktion                      : TCP-Verbindung (ein- oder ausgehend) schließen
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [080][put.handle]
+''busprotokoll                  : [080][sub_putlong.handle]
 ''                              : handle     - lfd. Nr. der zu schließenden Verbindung
 
   bus_putchar1(gc#a_lanClose)
-  bus_putchar1(handle)
+  bus_putlong1(handle)
 
 PUB lan_rxflush
 PUB lan_rxcheck(handle): rxbyte
@@ -1125,14 +1125,14 @@ PUB lan_rxcheck(handle): rxbyte
 ''                              : (vor allem nicht, wenn -1 und -3 enthalten sein können)
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [082][put.handle][get.rxbyte]
+''busprotokoll                  : [082][sub_putlong.handle][get.rxbyte]
 ''                              : handle  - lfd. Nr. der Verbindung
 ''                              : rxbyte  - empfangenes Zeichen (0 - 127) oder
 ''                              :           sock#RETBUFFEREMPTY (-1) wenn Puffer leer
 ''                              :           sock#ERRSOCKETCLOSED (-3) wenn keine Verbindung mehr
 
   bus_putchar1(gc#a_lanRXCheck)
-  bus_putchar1(handle)
+  bus_putlong1(handle)
   rxbyte := bus_getchar1
 
 PUB lan_rxtime(handle, timeout): rxbyte
@@ -1141,14 +1141,14 @@ PUB lan_rxtime(handle, timeout): rxbyte
 ''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) empfangen wird
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [083][put.handle][sub_putword.timeout][get.rxbyte]
+''busprotokoll                  : [083][sub_putlong.handle][sub_putword.timeout][get.rxbyte]
 ''                              : handle  - lfd. Nr. der Verbindung
 ''                              : timeout - Timeout in Millisekunden
 ''                              : rxbyte  - empfangenes Zeichen (0 - 127) oder
 ''                              :           sock#RETBUFFEREMPTY (-1) wenn Timeout oder keine Verbindung mehr
 
   bus_putchar1(gc#a_lanRXTime)
-  bus_putchar1(handle)
+  bus_putlong1(handle)
   bus_putword1(timeout)
   rxbyte := bus_getchar1
 
@@ -1163,13 +1163,13 @@ PUB lan_txcheck(handle, txbyte): error
 ''                              : (vor allem nicht, wenn -1 enthalten sein kann)
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [088][put.handle][put.tybyte][get.error]
+''busprotokoll                  : [088][sub_putlong.handle][put.tybyte][get.error]
 ''                              : handle - lfd. Nr. der Verbindung
 ''                              : txbyte - zu sendendes Zeichen
 ''                              : error  - ungleich Null bei Fehler
 
   bus_putchar1(gc#a_lanTXCheck)
-  bus_putchar1(handle)
+  bus_putlong1(handle)
   bus_putchar1(txbyte)
   error := bus_getchar1
 
