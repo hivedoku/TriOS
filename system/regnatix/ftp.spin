@@ -14,7 +14,7 @@ Chip            : Regnatix
 Typ             : Programm
 Version         : 
 Subversion      : 
-Funktion        : IP-Konfiguration in NVRAM ablegen
+Funktion        : FTP-Client
 Komponenten     : -
 COG's           : -
 Logbuch         :
@@ -46,8 +46,8 @@ VAR
   byte    parastr[64]
   byte    strTemp[128]
   byte    addrset
-  long    handle_control             'Handle FTP Control Verbindung
-  long    handle_data                'Handle FTP Data Verbindung
+  byte    handleidx_control          'Handle FTP Control Verbindung
+  byte    handleidx_data             'Handle FTP Data Verbindung
 
 PUB main | pasvport
 
@@ -84,12 +84,12 @@ PRI ftpconnect
   delay_ms(1000) 'nach ios.lanstart dauert es, bis der Stack funktioniert
   ios.print(string("Verbinde mit FTP-Server..."))
   ios.printnl
-  if (handle_control := ios.lan_connect(ip_addr, 21)) == -102
+  if (handleidx_control := ios.lan_connect(ip_addr, 21)) == $FF
     ios.print(string("Kein Socket frei..."))
     ios.printnl
     return(-1)
-''  ios.lan_resetbuffers(handle_control)
-  ifnot (ios.lan_waitconntimeout(handle_control, 2000))
+''  ios.lan_resetbuffers(handleidx_control)
+  ifnot (ios.lan_waitconntimeout(handleidx_control, 2000))
     ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden."))
     ios.printnl
     return(-1)
@@ -192,9 +192,9 @@ PRI getResponse (strOk) : respOk | len
 PRI readLine | i, ch
 
   repeat i from 0 to 126
-    ch := ios.lan_rxtime(handle_control, 500)
+    ch := ios.lan_rxtime(handleidx_control, 500)
     if ch == 13
-      ch := ios.lan_rxtime(handle_control, 500)
+      ch := ios.lan_rxtime(handleidx_control, 500)
     if ch == -1 or ch == 10
       quit
     strTemp[i] := ch
@@ -208,7 +208,7 @@ PRI sendStr (strSend) : error
   ios.print(string(" > "))
   ios.print(strSend)
   ios.printnl
-  error := ios.lan_txdata(handle_control, strSend, strsize(strSend))
+  error := ios.lan_txdata(handleidx_control, strSend, strsize(strSend))
 
 PRI delay_ms(Duration)
   waitcnt(((clkfreq / 1_000 * Duration - 3932)) + cnt)
