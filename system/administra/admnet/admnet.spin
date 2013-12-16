@@ -1324,7 +1324,32 @@ PRI lan_txcheck | handle, txbyte
 
 
 PRI lan_tx
-PRI lan_txdata
+PRI lan_txdata | handle, len, txbyte, error
+''funktionsgruppe               : lan
+''funktion                      : bei bestehender Verbindung die angegebene Datenmenge senden
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [090][sub_getlong.handle][sub_getlong.len][get.byte1][get.byte<len>][put.error]
+''                              : handle - lfd. Nr. der Verbindung
+''                              : len - Anzahl zu sendender Bytes
+''                              : error  - ungleich Null bei Fehler
+
+  error := FALSE
+  handle := sub_getlong
+  len := sub_getlong
+
+  repeat len
+    txbyte := bus_getchar
+    ifnot error
+      repeat while sock.writeByteNonBlocking(handle, txbyte) < 0
+        ifnot sock.isConnected(handle)
+          error := sock#ERRSOCKETCLOSED
+          quit
+
+  bus_putchar(error)
+
+
+
 
 DAT
                 long                                    ' long alignment for addresses

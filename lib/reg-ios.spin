@@ -1134,6 +1134,7 @@ PUB lan_rxcheck(handle): rxbyte
   bus_putchar1(gc#a_lanRXCheck)
   bus_putlong1(handle)
   rxbyte := bus_getchar1
+  rxbyte := ~rxbyte
 
 PUB lan_rxtime(handle, timeout): rxbyte
 ''funktionsgruppe               : lan
@@ -1151,6 +1152,7 @@ PUB lan_rxtime(handle, timeout): rxbyte
   bus_putlong1(handle)
   bus_putword1(timeout)
   rxbyte := bus_getchar1
+  rxbyte := ~rxbyte
 
 PUB lan_rxbyte
 PUB lan_rxdatatime
@@ -1174,7 +1176,26 @@ PUB lan_txcheck(handle, txbyte): error
   error := bus_getchar1
 
 PUB lan_tx
-PUB lan_txdata
+PUB lan_txdata(handle, ptr, len): error
+''funktionsgruppe               : lan
+''funktion                      : bei bestehender Verbindung die angegebene Datenmenge senden
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [090][sub_putlong.handle][sub_putlong.len][put.byte1][put.byte<len>][get.error]
+''                              : handle              - lfd. Nr. der Verbindung
+''                              : byte1 ... byte<len> - zu sendende Bytes
+''                              : len                 - Anzahl zu sendender Bytes
+''                              : error               - ungleich Null bei Fehler
+
+  bus_putchar1(gc#a_lanTXData)
+  bus_putlong1(handle)
+  bus_putlong1(len)
+
+  repeat len
+    bus_putchar1(byte[ptr++])
+
+  error := bus_getchar1
+  error := ~error
 
 CON ''------------------------------------------------- Hydra Sound System
 

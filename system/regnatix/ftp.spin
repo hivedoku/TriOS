@@ -49,7 +49,7 @@ VAR
   long    handle_control             'Handle FTP Control Verbindung
   long    handle_data                'Handle FTP Data Verbindung
 
-PUB main
+PUB main | pasvport
 
   ip_addr := 0
 
@@ -64,42 +64,102 @@ PUB main
                setaddr(@parastr)
         other: ios.print(@help)
 
-  if (ip_addr)  ' Adresse nicht 0.0.0.0
-    ios.print(string("Starte LAN..."))
+  ifnot ftpconnect
+    ifnot ftplogin(string("anonymous"),string("password"))
+      ifnot ftpcwd(string("system"))
+        if (pasvport := ftppasv)
+          ios.print(string("Öffne Verbindung zu Passiv-Port "))
+          ios.print(num.ToStr(pasvport, num#DEC))
+  ios.stop
+
+PRI ftpconnect
+
+  ifnot (ip_addr)  ' Adresse 0.0.0.0
+    ios.print(string("FTP-Server nicht angegeben (Parameter /s)"))
     ios.printnl
-    ios.lanstart
-    delay_ms(1000) 'nach ios.lanstart dauert es, bis der Stack funktioniert
-    ios.print(string("Verbinde mit FTP-Server..."))
+    return(-1)
+  ios.print(string("Starte LAN..."))
+  ios.printnl
+  ios.lanstart
+  delay_ms(1000) 'nach ios.lanstart dauert es, bis der Stack funktioniert
+  ios.print(string("Verbinde mit FTP-Server..."))
+  ios.printnl
+  if (handle_control := ios.lan_connect(ip_addr, 21)) == -102
+    ios.print(string("Kein Socket frei..."))
     ios.printnl
-    handle_control := ios.lan_connect(ip_addr, 21)
-''    ios.lan_resetbuffers(handle_control)
-    ios.print(string("Handle Connect: "))
-    ios.print(num.ToStr(handle_control, num#HEX))
+    return(-1)
+''  ios.lan_resetbuffers(handle_control)
+  ifnot (ios.lan_waitconntimeout(handle_control, 2000))
+    ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden."))
     ios.printnl
-    if (ios.lan_waitconntimeout(handle_control, 2000))
-      ios.print(string("Verbindung mit FTP-Server hergestellt."))
-      ios.printnl
-      if getResponse(string("220 "))
-        if sendStr(handle_control, string("USER anonymous",13,10))
-          getResponse(string("230 "))
-        else
-        ios.print(string("Fehler beim Senden des Usernamens"))
-        ios.printnl
-      else
-        ios.print(string("Antwort falsch."))
-        ios.printnl
-    else
-      ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden."))
-      ios.printnl
+    return(-1)
+  ios.print(string("Verbindung mit FTP-Server hergestellt, warte auf Antwort..."))
+  ios.printnl
+  ifnot getResponse(string("220 "))
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
+  return(0)
 
+PRI ftplogin(username, password)
 
+  ifnot strsize(username)
+    username := string("anonymous")
+  if sendStr(string("USER ")) || sendStr(username) || sendStr(string(13,10))
+    ios.print(string("Fehler beim Senden des Usernamens"))
+    ios.printnl
+    return(-1)
+  ifnot getResponse(string("230 "))
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
+  return(0)
 
-    ios.lan_close(handle_control)
+PRI ftpcwd(directory)
 
- ios.stop
+  ifnot strsize(directory)
+    directory := string("/")
+  if sendStr(string("CWD ")) || sendStr(directory) || sendStr(string(13,10))
+    ios.print(string("Fehler beim Senden des Verzeichnisses"))
+    ios.printnl
+    return(-1)
+  ifnot getResponse(string("250 "))
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
+  return(0)
 
-PRI delay_ms(Duration)
-  waitcnt(((clkfreq / 1_000 * Duration - 3932)) + cnt)
+PRI ftppasv : port | i, k, port256, port1
+
+  port := 0
+  port256 := 0
+  port1 := 0
+  k := 0
+
+  if sendStr(string("PASV",13,10))
+    return(-1)
+
+  repeat until readLine == -1
+    ios.print(string(" < "))
+    ios.print(@strTemp)
+    ios.printnl
+    strTemp[4] := 0
+    if strcomp(@strTemp, string("227 "))
+      repeat i from 5 to 126
+        if (strTemp[i] == 0) OR (strTemp[i] == 13) OR (strTemp[i] == 10)
+          quit
+        if strTemp[i] == 44 'Komma
+          strTemp[i] := 0
+          k++
+          if k == 4         '4. Komma, Port Teil 1 folgt
+            port256 := i + 1
+          if k == 5         '5. Komma, Port Teil 2 folgt
+            port1 := i + 1
+        if strTemp[i] == 41 'Klammer zu
+          strTemp[i] := 0
+          if (port256 & port1)
+            port := (num.FromStr(@strTemp+port256, num#DEC) * 256) + num.FromStr(@strTemp+port1, num#DEC)
+
 
 PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable schreiben
 
@@ -117,14 +177,10 @@ PRI getResponse (strOk) : respOk | len
 
   respOk := FALSE
 
-  repeat
-    readLine
-    if strsize(@strTemp) == 0
-      quit
-    ios.print(string("Antwort: "))
-    ios.print(strTemp)
+  repeat until readLine == -1
+    ios.print(string(" < "))
+    ios.print(@strTemp)
     ios.printnl
-    'byte[@strTemp+strsize(strOk)] := 0
     strTemp[strsize(strOk)] := 0
     if strcomp(@strTemp, strOk)
       respOk := TRUE
@@ -145,15 +201,17 @@ PRI readLine | i, ch
 
   strTemp[i] := 0
 
-  return i
+  return ch 'letztes Zeichen oder -1, wenn keins mehr empfangen
 
-PRI sendStr (handle, strSend) | i, err
+PRI sendStr (strSend) : error
 
-  repeat i from 0 to strsize(strSend)
-    if (err := ios.lan_txcheck(handle, strSend[i]))
-      quit
+  ios.print(string(" > "))
+  ios.print(strSend)
+  ios.printnl
+  error := ios.lan_txdata(handle_control, strSend, strsize(strSend))
 
-  return err
+PRI delay_ms(Duration)
+  waitcnt(((clkfreq / 1_000 * Duration - 3932)) + cnt)
 
 DAT                                                     'sys: helptext
 
