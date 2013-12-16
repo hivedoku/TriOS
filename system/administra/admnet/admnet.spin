@@ -208,6 +208,7 @@ VAR
   byte  tbuf2[20]
   long  com_baud
   byte  lan_started                                     'LAN gestartet?
+  long  sockhandle[sock#sNumSockets]                    'Handle für mit sock.connect/sock.listen erstellten Socket
   byte  bufrxconn[rxlen]                                'LAN Empfangspuffer ausgehende Verbindung
   byte  buftxconn[txlen]                                'LAN Sendepuffer ausgehende Verbindung
   byte  bufrxlist[rxlen]                                'LAN Empfangspuffer eingehende Verbindung
@@ -1174,41 +1175,40 @@ PRI lan_stop
     sock.stop
     lan_started := false
 
-PRI lan_connect | ipaddr, remoteport, handle
+PRI lan_connect | ipaddr, remoteport, handle, handleidx
 ''funktionsgruppe               : lan
 ''funktion                      : ausgehende TCP-Verbindung öffnen (mit Server verbinden)
-''                              : Da hier feste Puffer (bufrxconn,buftxconn) verwendet werden,
-''                              : darf diese Funktion nur einmal aufgerufen werden
-''                              : (driver_socket.spin handelt per default bis 4 Sockets)
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [073][sub_getlong.ipaddr][sub_getword.remoteport][sub_putlong.handle]
+''busprotokoll                  : [073][sub_getlong.ipaddr][sub_getword.remoteport][put.handleidx]
 ''                              : ipaddr     - ipv4 address packed into a long (ie: 1.2.3.4 => $01_02_03_04)
 ''                              : remoteport - port number to connect to
-''                              : handle     - lfd. Nr. der Verbindung
+''                              : handleidx  - lfd. Nr. der Verbindung (index des kompletten handle)
 
   ipaddr := sub_getlong
   remoteport := sub_getword
 
   handle := sock.connect(ipaddr, remoteport, @bufrxconn, rxlen, @buftxconn, txlen)
+  handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
+  sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
 
-  sub_putlong(handle)                                      'handle senden
+  bus_putchar(handleidx)                                      'handle senden
 
 
 PRI lan_listen
 PRI lan_relisten
-PRI lan_isconnected | handle
+PRI lan_isconnected | handleidx
 ''funktionsgruppe               : lan
 ''funktion                      : Abfrage, ob Socket verbunden
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [076][sub_getlong.handle][put.connected]
-''                              : handle     - lfd. Nr. der zu testenden Verbindung
+''busprotokoll                  : [076][get.handleidx][put.connected]
+''                              : handleidx     - lfd. Nr. der zu testenden Verbindung
 ''                              : connected  - True, if connected
 
-  handle := sub_getlong
+  handleidx := bus_getchar
 
-  bus_putchar(sock.isConnected(handle))
+  bus_putchar(sock.isConnected(sockhandle[handleidx]))
 
 PRI lan_rxcount
 PRI lan_resetbuffers | handle
