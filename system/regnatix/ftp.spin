@@ -44,14 +44,16 @@ VAR
 
   long    ip_addr
   byte    parastr[64]
+  byte    filename[64]
   byte    strTemp[128]
   byte    addrset
   byte    handleidx_control          'Handle FTP Control Verbindung
   byte    handleidx_data             'Handle FTP Data Verbindung
 
-PUB main | pasvport
+PUB main
 
   ip_addr := 0
+  filename[0] := 0
 
   ios.start                                             'ios initialisieren
   ios.printnl
@@ -62,14 +64,18 @@ PUB main | pasvport
         "?": ios.print(@help)
         "s": if ios.paranext(@parastr)
                setaddr(@parastr)
+        "d": if ios.paranext(@parastr)
+               download(@parastr)
         other: ios.print(@help)
 
   ifnot ftpconnect
     ifnot ftplogin(string("anonymous"),string("password"))
       ifnot ftpcwd(string("system"))
-        if (pasvport := ftppasv)
-          ios.print(string("Öffne Verbindung zu Passiv-Port "))
-          ios.print(num.ToStr(pasvport, num#DEC))
+        ifnot filename[0] == 0
+          if ftppasv
+            ftpretr
+
+
   ios.stop
 
 PRI ftpconnect
@@ -137,7 +143,7 @@ PRI ftppasv : port | i, k, port256, port1
   k := 0
 
   if sendStr(string("PASV",13,10))
-    return(-1)
+    return(0)
 
   repeat until readLine == -1
     ios.print(string(" < "))
@@ -160,6 +166,33 @@ PRI ftppasv : port | i, k, port256, port1
           if (port256 & port1)
             port := (num.FromStr(@strTemp+port256, num#DEC) * 256) + num.FromStr(@strTemp+port1, num#DEC)
 
+  if (port == 0)
+    ios.print(string("FTP-Server-Fehler beim Öffnen des Passiv-Ports"))
+    ios.printnl
+    return(0)
+  ios.print(string("Öffne Verbindung zu Passiv-Port "))
+  ios.print(num.ToStr(port, num#DEC))
+  ios.printnl
+  if (handleidx_data := ios.lan_connect(ip_addr, port)) == $FF
+    ios.print(string("Kein Socket frei..."))
+    ios.printnl
+    return(0)
+  ifnot (ios.lan_waitconntimeout(handleidx_data, 2000))
+    ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden."))
+    ios.printnl
+    return(0)
+
+PRI ftpretr
+
+  if sendStr(string("RETR ")) || sendStr(filename) || sendStr(string(13,10))
+    ios.print(string("Fehler beim Senden des Filenamens"))
+    return -1
+
+PRI download (parameter) | i                             'filename kopieren
+
+  repeat strsize(filename)
+    filename[i] := parameter[i]
+    i++
 
 PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable schreiben
 
@@ -218,6 +251,7 @@ DAT                                                     'sys: helptext
 
 help          byte  "/?  :          Hilfe",13
               byte  "/s <a.b.c.d> : Server-Adresse",13
+              byte  "/d <filename>: Download <filename>",13
               byte  0
 
 DAT                                                     'lizenz
