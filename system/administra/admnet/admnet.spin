@@ -1202,7 +1202,7 @@ PRI lan_connect | ipaddr, remoteport, handle, handleidx, i
       quit
     i++
 
-  ifnot (handle := sock.connect(ipaddr, remoteport, @bufrx[i*sock#sNumSockets], rxlen, @buftx[i*sock#sNumSockets], txlen)) ==-102
+  ifnot (handle := sock.connect(ipaddr, remoteport, @bufrx[i*rxlen], rxlen, @buftx[i*txlen], txlen)) ==-102
     handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
     sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
     bufidx[i] :=handleidx
@@ -1320,7 +1320,30 @@ PRI lan_rxtime | handleidx, timeout, t, rxbyte
 
 PRI lan_rxbyte
 PRI lan_rxdatatime
-PRI lan_rxdata
+PRI lan_rxdata | handleidx, len, rxbyte, error
+''funktionsgruppe               : lan
+''funktion                      : bei bestehender Verbindung die angegebene Datenmenge empfangen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [086][get.handleidx][sub_getlong.len][put.byte1][put.byte<len>][put.error]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : len       - Anzahl zu empfangender Bytes
+''                              : error     - ungleich Null bei Fehler
+
+  error := FALSE
+  handleidx := bus_getchar
+  len := sub_getlong
+
+  repeat len
+    ifnot error
+      repeat while (rxbyte := sock.readByteNonBlocking(sockhandle[handleidx])) < 0
+        ifnot sock.isConnected(sockhandle[handleidx])
+          error := sock#ERRSOCKETCLOSED
+          quit
+    bus_putchar(rxbyte)
+
+  bus_putchar(error)
+
 PRI lan_txflush
 PRI lan_txcheck | handleidx, txbyte
 ''funktionsgruppe               : lan
@@ -1370,9 +1393,6 @@ PRI lan_txdata | handleidx, len, txbyte, error
           quit
 
   bus_putchar(error)
-
-
-
 
 DAT
                 long                                    ' long alignment for addresses

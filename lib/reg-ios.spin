@@ -1156,7 +1156,30 @@ PUB lan_rxtime(handleidx, timeout): rxbyte
 
 PUB lan_rxbyte
 PUB lan_rxdatatime
-PUB lan_rxdata
+PUB lan_rxdata(handleidx, filename, len): error | fnr
+''funktionsgruppe               : lan
+''funktion                      : bei bestehender Verbindung die angegebene Datenmenge empfangen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [086][put.handleidx][sub_putlong.len][get.byte1][get.byte<len>][get.error]
+''                              : handleidx           - lfd. Nr. der Verbindung
+''                              : byte1 ... byte<len> - zu empfangende Bytes
+''                              : len                 - Anzahl zu empfangende Bytes
+''                              : error               - ungleich Null bei Fehler
+
+  rd_newfile(filename,len)
+  fnr := rd_open(filename)
+  ifnot fnr == -1
+    bus_putchar1(gc#a_lanRXData)
+    bus_putchar1(handleidx)
+    bus_putlong1(len)
+    repeat len
+      rd_put(fnr,bus_getchar1)
+    rd_close(fnr)
+
+  error := bus_getchar1
+  error := ~error
+
 PUB lan_txflush
 PUB lan_txcheck(handleidx, txbyte): error
 ''funktionsgruppe               : lan

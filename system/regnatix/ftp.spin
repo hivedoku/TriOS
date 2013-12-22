@@ -71,11 +71,12 @@ PUB main
   ifnot ftpconnect
     ifnot ftplogin(string("anonymous"),string("password"))
       ifnot ftpcwd(string("system"))
-        ifnot filename[0] == 0
+        ifnot byte[filename][0] == 0
           if ftppasv
             ftpretr
 
 
+  ftpclose
   ios.stop
 
 PRI ftpconnect
@@ -106,6 +107,15 @@ PRI ftpconnect
     ios.printnl
     return(-1)
   return(0)
+
+PRI ftpclose
+
+  if handleidx_control
+    ios.lan_close(handleidx_control)
+    handleidx_control := 0
+  if handleidx_data
+    ios.lan_close(handleidx_data)
+    handleidx_data := 0
 
 PRI ftplogin(username, password)
 
@@ -182,17 +192,52 @@ PRI ftppasv : port | i, k, port256, port1
     ios.printnl
     return(0)
 
-PRI ftpretr
+PRI ftpretr | len
+
+  if sendStr(string("SIZE ")) || sendStr(filename) || sendStr(string(13,10))
+    ios.print(string("Fehler beim Senden des SIZE-Kommandos"))
+    ios.printnl
+    return(-1)
+  ifnot getResponse(string("213"))
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
+  ifnot(len := num.FromStr(@strTemp+4, num#DEC))
+    return(-1)
+
+  if sendStr(string("TYPE I",13,10))
+    ios.print(string("Fehler beim Senden des Types"))
+    ios.printnl
+    return(-1)
+  ifnot getResponse(string("200 "))
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
 
   if sendStr(string("RETR ")) || sendStr(filename) || sendStr(string(13,10))
     ios.print(string("Fehler beim Senden des Filenamens"))
     return -1
+  ifnot getResponse(string("150 "))
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
+
+  if ios.lan_rxdata(handleidx_data, filename, len)
+    ios.print(string("Fehler beim Empfang der Datei."))
+    ios.printnl
+    return(-1)
+
+  ifnot getResponse(string("226 "))
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
 
 PRI download (parameter) | i                             'filename kopieren
 
-  repeat strsize(filename)
-    filename[i] := parameter[i]
+  repeat strsize(parameter)
+    byte[filename][i] := byte[parameter][i]
     i++
+  byte[filename][i] := 0
 
 PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable schreiben
 
