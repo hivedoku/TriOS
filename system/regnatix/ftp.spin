@@ -1,7 +1,7 @@
 {{
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Autor: Jörg Deckert                                                                                 │
-│ Copyright (c) 2013 Jörg Deckert                                                                     │
+│ Autor: Jörg Deckert                                                                                  │
+│ Copyright (c) 2013 Jörg Deckert                                                                      │
 │ See end of file for terms of use.                                                                    │
 │ Die Nutzungsbedingungen befinden sich am Ende der Datei                                              │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -19,7 +19,7 @@ Komponenten     : -
 COG's           : -
 Logbuch         :
 
-11.12.2013-joergd - erste Version
+22.12.2013-joergd - erste Version
 
 
 Kommandoliste   :
@@ -44,6 +44,7 @@ VAR
 
   long    ip_addr
   byte    parastr[64]
+  byte    remdir[64]
   byte    filename[64]
   byte    strTemp[128]
   byte    addrset
@@ -53,6 +54,7 @@ VAR
 PUB main
 
   ip_addr := 0
+  remdir[0] := 0
   filename[0] := 0
 
   ios.start                                             'ios initialisieren
@@ -64,16 +66,17 @@ PUB main
         "?": ios.print(@help)
         "s": if ios.paranext(@parastr)
                setaddr(@parastr)
-        "d": if ios.paranext(@parastr)
-               download(@parastr)
+        "v": ios.paranext(@remdir)
+        "d": ios.paranext(@filename)
         other: ios.print(@help)
 
   ifnot ftpconnect
     ifnot ftplogin(string("anonymous"),string("password"))
-      ifnot ftpcwd(string("system"))
-        ifnot byte[filename][0] == 0
-          if ftppasv
-            ftpretr
+      ifnot byte[@remdir][0] == 0
+        ftpcwd
+      ifnot byte[@filename][0] == 0
+        if ftppasv
+          ftpretr
 
 
   ftpclose
@@ -88,14 +91,13 @@ PRI ftpconnect
   ios.print(string("Starte LAN..."))
   ios.printnl
   ios.lanstart
-  delay_ms(1000) 'nach ios.lanstart dauert es, bis der Stack funktioniert
+  delay_ms(800) 'nach ios.lanstart dauert es, bis der Stack funktioniert
   ios.print(string("Verbinde mit FTP-Server..."))
   ios.printnl
   if (handleidx_control := ios.lan_connect(ip_addr, 21)) == $FF
     ios.print(string("Kein Socket frei..."))
     ios.printnl
     return(-1)
-''  ios.lan_resetbuffers(handleidx_control)
   ifnot (ios.lan_waitconntimeout(handleidx_control, 2000))
     ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden."))
     ios.printnl
@@ -117,7 +119,10 @@ PRI ftpclose
     ios.lan_close(handleidx_data)
     handleidx_data := 0
 
-PRI ftplogin(username, password)
+PRI ftplogin(username, password) | pwreq, respOK
+
+  pwreq := FALSE
+  respOK := FALSE
 
   ifnot strsize(username)
     username := string("anonymous")
@@ -125,17 +130,43 @@ PRI ftplogin(username, password)
     ios.print(string("Fehler beim Senden des Usernamens"))
     ios.printnl
     return(-1)
+
+  repeat until readLine == -1
+    ios.print(string(" < "))
+    ios.print(@strTemp)
+    ios.printnl
+    strTemp[4] := 0
+    if strcomp(@strTemp, string("230 "))
+      respOk := TRUE
+      ios.print(string("Antwort korrekt."))
+      ios.printnl
+    elseif strcomp(@strTemp, string("331 "))
+      pwreq := TRUE
+      respOk := TRUE
+      ios.print(string("Antwort korrekt."))
+      ios.printnl
+  ifnot respOK
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
+
+  ifnot pwreq
+    return(0)
+
+  if sendStr(string("PASS ")) || sendStr(password) || sendStr(string(13,10))
+    ios.print(string("Fehler beim Senden des Passworts"))
+    ios.printnl
+    return(-1)
   ifnot getResponse(string("230 "))
     ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
     ios.printnl
     return(-1)
+
   return(0)
 
-PRI ftpcwd(directory)
+PRI ftpcwd
 
-  ifnot strsize(directory)
-    directory := string("/")
-  if sendStr(string("CWD ")) || sendStr(directory) || sendStr(string(13,10))
+  if sendStr(string("CWD ")) || sendStr(@remdir) || sendStr(string(13,10))
     ios.print(string("Fehler beim Senden des Verzeichnisses"))
     ios.printnl
     return(-1)
@@ -194,7 +225,7 @@ PRI ftppasv : port | i, k, port256, port1
 
 PRI ftpretr | len
 
-  if sendStr(string("SIZE ")) || sendStr(filename) || sendStr(string(13,10))
+  if sendStr(string("SIZE ")) || sendStr(@filename) || sendStr(string(13,10))
     ios.print(string("Fehler beim Senden des SIZE-Kommandos"))
     ios.printnl
     return(-1)
@@ -214,7 +245,7 @@ PRI ftpretr | len
     ios.printnl
     return(-1)
 
-  if sendStr(string("RETR ")) || sendStr(filename) || sendStr(string(13,10))
+  if sendStr(string("RETR ")) || sendStr(@filename) || sendStr(string(13,10))
     ios.print(string("Fehler beim Senden des Filenamens"))
     return -1
   ifnot getResponse(string("150 "))
@@ -222,7 +253,7 @@ PRI ftpretr | len
     ios.printnl
     return(-1)
 
-  if ios.lan_rxdata(handleidx_data, filename, len)
+  if ios.lan_rxdata(handleidx_data, @filename, len)
     ios.print(string("Fehler beim Empfang der Datei."))
     ios.printnl
     return(-1)
@@ -231,13 +262,6 @@ PRI ftpretr | len
     ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
     ios.printnl
     return(-1)
-
-PRI download (parameter) | i                             'filename kopieren
-
-  repeat strsize(parameter)
-    byte[filename][i] := byte[parameter][i]
-    i++
-  byte[filename][i] := 0
 
 PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable schreiben
 
@@ -294,9 +318,10 @@ PRI delay_ms(Duration)
 DAT                                                     'sys: helptext
 
 
-help          byte  "/?  :          Hilfe",13
-              byte  "/s <a.b.c.d> : Server-Adresse",13
-              byte  "/d <filename>: Download <filename>",13
+help          byte  "/?              : Hilfe",13
+              byte  "/s <a.b.c.d>    : Server-Adresse",13
+              byte  "/v <verzeichnis>: in entferntes Verzeichnis wechseln",13
+              byte  "/d <filename>   : Download <filename>",13
               byte  0
 
 DAT                                                     'lizenz

@@ -168,22 +168,11 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_lanStop                                       'Stop Network
         a_lanConnect                                    'ausgehende TCP-Verbindung öffnen
         a_lanListen                                     'auf eingehende TCP-Verbindung lauschen
-        a_lanReListen                                   'wieder auf eingehende TCP-Verbindung lauschen
-        a_lanIsConnected                                'Prüfen, ob verbunden
-        a_lanRXCount                                    'Anzahl Zeichen im Empfangspuffer
-        a_lanResetBuffers                               'Puffer zurücksetzen
         a_lanWaitConnTimeout                            'bestimmte Zeit auf Verbindung warten
         a_lanClose                                      'TCP-Verbindung schließen
-        a_lanRXFlush                                    'Empfangspuffer leeren
-        a_lanRXCheck                                    'warten auf Byte aus Empfangspuffer
         a_lanRXTime                                     'bestimmte Zeit warten auf Byte aus Empfangspuffer
-        a_lanRXByte                                     'Byte aus Empfangspuffer lesen
-        a_lanRXDataTime                                 'bestimmte Zeit auf daten aus Empfangspuffer warten
         a_lanRXData                                     'Daten aus Empfangspuffer lesen
-        a_lanTXFlush                                    'Sendepuffer leeren
-        a_lanTXCheck                                    'Verbindung prüfen und Byte senden
-        a_lanTX                                         'Byte senden
-        a_lanTXData '90                                 'Daten senden
+        a_lanTXData '79                                 'Daten senden
 
 '       ----------------------------------------------  CHIP-MANAGMENT
 #92,    a_mgrSetSound                                   'soundsubsysteme verwalten

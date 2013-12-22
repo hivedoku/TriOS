@@ -1064,39 +1064,25 @@ PUB lan_connect(ipaddr, remoteport): handleidx
   bus_putword1(remoteport)
   handleidx := bus_getchar1
 
-PUB lan_listen
-PUB lan_relisten
-PUB lan_isconnected(handleidx): connected
+PUB lan_listen(port): handleidx
 ''funktionsgruppe               : lan
-''funktion                      : Abfrage, ob Socket verbunden
+''funktion                      : Port für eingehende TCP-Verbindung öffnen
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [076][sub_putlong.handle][get.connected]
-''                              : handleidx  - lfd. Nr. der zu testenden Verbindung
-''                              : connected  - True, if connected
+''busprotokoll                  : [074][sub_putword.port][get.handleidx]
+''                              : port       - zu öffnende Portnummer
+''                              : handleidx  - lfd. Nr. der Verbindung (index des kompletten handle)
 
-  bus_putchar1(gc#a_lanIsConnected)
-  bus_putchar1(handleidx)
-  connected := bus_getchar1
-
-PUB lan_rxcount
-PUB lan_resetbuffers(handleidx)
-''funktionsgruppe               : lan
-''funktion                      : Sende- und Empfangspuffer zurücksetzen
-''eingabe                       : -
-''ausgabe                       : -
-''busprotokoll                  : [078][put.handleidx]
-''                              : handleidx - lfd. Nr. der Verbindung
-
-  bus_putchar1(gc#a_lanResetBuffers)
-  bus_putchar1(handleidx)
+  bus_putchar1(gc#a_lanListen)
+  bus_putword1(port)
+  handleidx := bus_getchar1
 
 PUB lan_waitconntimeout(handleidx, timeout): connected
 ''funktionsgruppe               : lan
 ''funktion                      : bestimmte Zeit auf Verbindung warten
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [079][put.handleidx][sub_putword.timeout][get.connected]
+''busprotokoll                  : [075][put.handleidx][sub_putword.timeout][get.connected]
 ''                              : handleidx  - lfd. Nr. der zu testenden Verbindung
 ''                              : timeout    - Timeout in Millisekunden
 ''                              : connected  - True, if connected
@@ -1111,30 +1097,11 @@ PUB lan_close(handleidx)
 ''funktion                      : TCP-Verbindung (ein- oder ausgehend) schließen
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [080][put.handleidx]
+''busprotokoll                  : [076][put.handleidx]
 ''                              : handleidx     - lfd. Nr. der zu schließenden Verbindung
 
   bus_putchar1(gc#a_lanClose)
   bus_putchar1(handleidx)
-
-PUB lan_rxflush
-PUB lan_rxcheck(handleidx): rxbyte
-''funktionsgruppe               : lan
-''funktion                      : ASCII-Zeichen lesen, wenn vorhanden
-''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) empfangen wird
-''                              : (vor allem nicht, wenn -1 und -3 enthalten sein können)
-''eingabe                       : -
-''ausgabe                       : -
-''busprotokoll                  : [082][put.handleidx][get.rxbyte]
-''                              : handleidx - lfd. Nr. der Verbindung
-''                              : rxbyte    - empfangenes Zeichen (0 - 127) oder
-''                              :             sock#RETBUFFEREMPTY (-1) wenn Puffer leer
-''                              :             sock#ERRSOCKETCLOSED (-3) wenn keine Verbindung mehr
-
-  bus_putchar1(gc#a_lanRXCheck)
-  bus_putchar1(handleidx)
-  rxbyte := bus_getchar1
-  rxbyte := ~rxbyte
 
 PUB lan_rxtime(handleidx, timeout): rxbyte
 ''funktionsgruppe               : lan
@@ -1142,7 +1109,7 @@ PUB lan_rxtime(handleidx, timeout): rxbyte
 ''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) empfangen wird
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [083][sub_putlong.handleidx][sub_putword.timeout][get.rxbyte]
+''busprotokoll                  : [077][sub_putlong.handleidx][sub_putword.timeout][get.rxbyte]
 ''                              : handleidx - lfd. Nr. der Verbindung
 ''                              : timeout   - Timeout in Millisekunden
 ''                              : rxbyte    - empfangenes Zeichen (0 - 127) oder
@@ -1154,14 +1121,12 @@ PUB lan_rxtime(handleidx, timeout): rxbyte
   rxbyte := bus_getchar1
   rxbyte := ~rxbyte
 
-PUB lan_rxbyte
-PUB lan_rxdatatime
 PUB lan_rxdata(handleidx, filename, len): error | fnr
 ''funktionsgruppe               : lan
 ''funktion                      : bei bestehender Verbindung die angegebene Datenmenge empfangen
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [086][put.handleidx][sub_putlong.len][get.byte1][get.byte<len>][get.error]
+''busprotokoll                  : [078][put.handleidx][sub_putlong.len][get.byte1][get.byte<len>][get.error]
 ''                              : handleidx           - lfd. Nr. der Verbindung
 ''                              : byte1 ... byte<len> - zu empfangende Bytes
 ''                              : len                 - Anzahl zu empfangende Bytes
@@ -1180,31 +1145,12 @@ PUB lan_rxdata(handleidx, filename, len): error | fnr
   error := bus_getchar1
   error := ~error
 
-PUB lan_txflush
-PUB lan_txcheck(handleidx, txbyte): error
-''funktionsgruppe               : lan
-''funktion                      : bei bestehender Verbindung ein ASCII-Zeichen zu senden
-''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) gesendet wird
-''                              : (vor allem nicht, wenn -1 enthalten sein kann)
-''eingabe                       : -
-''ausgabe                       : -
-''busprotokoll                  : [088][put.handleidx][put.tybyte][get.error]
-''                              : handleidx - lfd. Nr. der Verbindung
-''                              : txbyte    - zu sendendes Zeichen
-''                              : error     - ungleich Null bei Fehler
-
-  bus_putchar1(gc#a_lanTXCheck)
-  bus_putchar1(handleidx)
-  bus_putchar1(txbyte)
-  error := bus_getchar1
-
-PUB lan_tx
 PUB lan_txdata(handleidx, ptr, len): error
 ''funktionsgruppe               : lan
 ''funktion                      : bei bestehender Verbindung die angegebene Datenmenge senden
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [090][put.handleidx][sub_putlong.len][put.byte1][put.byte<len>][get.error]
+''busprotokoll                  : [079][put.handleidx][sub_putlong.len][put.byte1][put.byte<len>][get.error]
 ''                              : handleidx           - lfd. Nr. der Verbindung
 ''                              : byte1 ... byte<len> - zu sendende Bytes
 ''                              : len                 - Anzahl zu sendender Bytes
