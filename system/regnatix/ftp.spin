@@ -225,6 +225,15 @@ PRI ftppasv : port | i, k, port256, port1
 
 PRI ftpretr | len
 
+  if sendStr(string("TYPE I",13,10))
+    ios.print(string("Fehler beim Senden des Types"))
+    ios.printnl
+    return(-1)
+  ifnot getResponse(string("200 "))
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
+    ios.printnl
+    return(-1)
+
   if sendStr(string("SIZE ")) || sendStr(@filename) || sendStr(string(13,10))
     ios.print(string("Fehler beim Senden des SIZE-Kommandos"))
     ios.printnl
@@ -234,15 +243,6 @@ PRI ftpretr | len
     ios.printnl
     return(-1)
   ifnot(len := num.FromStr(@strTemp+4, num#DEC))
-    return(-1)
-
-  if sendStr(string("TYPE I",13,10))
-    ios.print(string("Fehler beim Senden des Types"))
-    ios.printnl
-    return(-1)
-  ifnot getResponse(string("200 "))
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
     return(-1)
 
   if sendStr(string("RETR ")) || sendStr(@filename) || sendStr(string(13,10))
