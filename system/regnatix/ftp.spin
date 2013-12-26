@@ -138,13 +138,11 @@ PRI ftplogin(username, password) | pwreq, respOK
     strTemp[4] := 0
     if strcomp(@strTemp, string("230 "))
       respOk := TRUE
-      ios.print(string("Antwort korrekt."))
-      ios.printnl
+      quit
     elseif strcomp(@strTemp, string("331 "))
       pwreq := TRUE
       respOk := TRUE
-      ios.print(string("Antwort korrekt."))
-      ios.printnl
+      quit
   ifnot respOK
     ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
     ios.printnl
@@ -206,6 +204,7 @@ PRI ftppasv : port | i, k, port256, port1
           strTemp[i] := 0
           if (port256 & port1)
             port := (num.FromStr(@strTemp+port256, num#DEC) * 256) + num.FromStr(@strTemp+port1, num#DEC)
+      quit
 
   if (port == 0)
     ios.print(string("FTP-Server-Fehler beim Öffnen des Passiv-Ports"))
@@ -223,7 +222,7 @@ PRI ftppasv : port | i, k, port256, port1
     ios.printnl
     return(0)
 
-PRI ftpretr | len
+PRI ftpretr | len, respOK
 
   if sendStr(string("TYPE I",13,10))
     ios.print(string("Fehler beim Senden des Types"))
@@ -248,7 +247,19 @@ PRI ftpretr | len
   if sendStr(string("RETR ")) || sendStr(@filename) || sendStr(string(13,10))
     ios.print(string("Fehler beim Senden des Filenamens"))
     return -1
-  ifnot getResponse(string("150 "))
+  respOK := FALSE
+  repeat until readLine == -1
+    ios.print(string(" < "))
+    ios.print(@strTemp)
+    ios.printnl
+    strTemp[4] := 0
+    if strcomp(@strTemp, string("150 "))
+      respOk := TRUE
+      quit
+    elseif strcomp(@strTemp, string("125 "))
+      respOk := TRUE
+      quit
+  ifnot respOK
     ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
     ios.printnl
     return(-1)
@@ -286,17 +297,16 @@ PRI getResponse (strOk) : respOk | len
     strTemp[strsize(strOk)] := 0
     if strcomp(@strTemp, strOk)
       respOk := TRUE
-      ios.print(string("Antwort korrekt."))
-      ios.printnl
+      quit
 
   return respOk
 
 PRI readLine | i, ch
 
   repeat i from 0 to 126
-    ch := ios.lan_rxtime(handleidx_control, 500)
+    ch := ios.lan_rxtime(handleidx_control, 2000)
     if ch == 13
-      ch := ios.lan_rxtime(handleidx_control, 500)
+      ch := ios.lan_rxtime(handleidx_control, 2000)
     if ch == -1 or ch == 10
       quit
     strTemp[i] := ch
