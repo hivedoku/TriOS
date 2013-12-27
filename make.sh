@@ -3,7 +3,8 @@
 date
 
 # Pfade
-bin="../Bin"
+##bin="../Bin"
+bin="/home/ftp/hive"
 sd="${bin}/sdcard"
 sdsys="${bin}/sdcard/system"
 flash="${bin}/flash"
