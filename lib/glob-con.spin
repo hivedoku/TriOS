@@ -172,7 +172,8 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_lanClose                                      'TCP-Verbindung schließen
         a_lanRXTime                                     'bestimmte Zeit warten auf Byte aus Empfangspuffer
         a_lanRXData                                     'Daten aus Empfangspuffer lesen
-        a_lanTXData '79                                 'Daten senden
+        a_lanTXData                                     'Daten senden
+        a_lanRXByte '80                                 'wenn vorhanden, Byte aus Empfangspuffer lesen
 
 '       ----------------------------------------------  CHIP-MANAGMENT
 #92,    a_mgrSetSound                                   'soundsubsysteme verwalten

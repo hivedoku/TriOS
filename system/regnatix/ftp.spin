@@ -40,6 +40,8 @@ CON
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
 
+ LANMASK     = %00000000_00000000_00000000_00100000
+
 VAR
 
   long    ip_addr
@@ -57,7 +59,10 @@ PUB main
   remdir[0] := 0
   filename[0] := 0
 
-  ios.start                                             'ios initialisieren
+  ios.start
+  ifnot (ios.admgetspec & LANMASK)
+    ios.print(string(10,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",10,"Bitte admnet laden.",10))
+    ios.stop
   ios.printnl
   ios.parastart                                         'parameterübergabe starten
   repeat while ios.paranext(@parastr)                   'parameter einlesen
@@ -112,12 +117,12 @@ PRI ftpconnect
 
 PRI ftpclose
 
-  if handleidx_control
+  ifnot handleidx_control == $FF
     ios.lan_close(handleidx_control)
-    handleidx_control := 0
-  if handleidx_data
+    handleidx_control := $FF
+  ifnot handleidx_data == $FF
     ios.lan_close(handleidx_data)
-    handleidx_data := 0
+    handleidx_data := $FF
 
 PRI ftplogin(username, password) | pwreq, respOK
 

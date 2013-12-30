@@ -299,6 +299,7 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_lanRXTime: lan_rxtime                      'bestimmte Zeit warten auf Byte aus Empfangspuffer
         gc#a_lanRXData: lan_rxdata                      'Daten aus Empfangspuffer lesen
         gc#a_lanTXData: lan_txdata                      'Daten senden
+        gc#a_lanRXByte: lan_rxbyte                      'wenn vorhanden, Byte aus Empfangspuffer lesen
 
 '       ----------------------------------------------  CHIP-MANAGMENT
         gc#a_mgrGetSpec: mgr_getspec                    'spezifikation abfragen
@@ -1333,6 +1334,19 @@ PRI lan_txdata | handleidx, len, txbyte, error
           quit
 
   bus_putchar(error)
+
+PRI lan_rxbyte
+''funktionsgruppe               : lan
+''funktion                      : wenn vorhanden, ein empfangenes Byte lesen
+''                              : nicht verwenden, wenn auch $FF empfangen werden kann
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [080][get.handleidx][put.rxbyte]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : rxbyte    - empfangenes Zeichen oder
+''                              :             sock#RETBUFFEREMPTY (-1) wenn kein Zeichen vorhanden
+
+  bus_putchar(sock.readByteNonBlocking(sockhandle[bus_getchar]))
 
 DAT
                 long                                    ' long alignment for addresses

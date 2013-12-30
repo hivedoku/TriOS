@@ -1166,6 +1166,22 @@ PUB lan_txdata(handleidx, ptr, len): error
   error := bus_getchar1
   error := ~error
 
+PUB lan_rxbyte(handleidx): rxbyte
+''funktionsgruppe               : lan
+''funktion                      : wenn vorhanden, ein empfangenes Byte lesen
+''                              : nicht verwenden, wenn auch $FF empfangen werden kann
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [080][sub_putlong.handleidx]][get.rxbyte]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : rxbyte    - empfangenes Zeichen oder
+''                              :             sock#RETBUFFEREMPTY (-1) wenn Empfangspuffer leer
+
+  bus_putchar1(gc#a_lanRXByte)
+  bus_putchar1(handleidx)
+  rxbyte := bus_getchar1
+  rxbyte := ~rxbyte
+
 CON ''------------------------------------------------- Hydra Sound System
 
 PUB hss_playfile(stradr) | status                       'hss: spielt übergebene hss-datei von sd-card

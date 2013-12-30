@@ -43,6 +43,8 @@ _XINFREQ     = 5_000_000
 
 CON
 
+LANMASK         = %00000000_00000000_00000000_00100000
+
 W0X_MENU        = 8
 W0Y_MENU        = 0
 
@@ -50,46 +52,61 @@ COL_DEFAULT     = 0
 COL_MENU        = 8
 COL_FOCUS       = 3
 
-LEN_PASS        =32
-LEN_NICK        =32
-LEN_USER        =32
-LEN_CHAN        =32
+LEN_PASS        = 32
+LEN_NICK        = 32
+LEN_USER        = 32
+LEN_CHAN        = 32
+LEN_IRCLINE     = 512
 
 VAR
 
+  long  t1char                                'Zeit, wann 1. Zeichen einer Zeile empfangen
   long  ip_addr
   word  ip_port
+  word  readpos
   byte  handleidx                             'Handle-Nummer IRC Verbindung
   byte  rows,cols,vidmod
   byte  x0[4],y0[4],xn[4],yn[4],hy[4],focus
   byte  password[LEN_PASS+1],nickname[LEN_NICK+1],username[LEN_USER+1],channel[LEN_CHAN+1]
   byte  input_str[64]
   byte  temp_str[64]
+  byte  send_str[LEN_IRCLINE]
+  byte  receive_str[LEN_IRCLINE]
 
 PUB main | key
 
   init
 
   repeat
-    key := ios.keywait
-    case key
-      gc#KEY_TAB:               f_focus
-      gc#KEY_F02:               f_setconf
-      gc#KEY_F03:               f_connect
-      gc#KEY_F10:               f_quit
-
+    if ios.keystat > 0
+      key := ios.key
+      case key
+        gc#KEY_TAB: f_focus
+        gc#KEY_F02: f_setconf
+        gc#KEY_F03: f_connect
+        gc#KEY_F09: f_close
+        gc#KEY_F10: f_quit
+        other:      f_input(key)
+    ifnot handleidx == $FF
+      irc_getLine
 
 PRI init
 
-  long[ip_addr] := 0
-  word[ip_port] := 0
-  password[0]   := 0
-  nickname[0]   := 0
-  username[0]   := 0
-  channel[0]    := 0
-  focus := 3
+  long[ip_addr]   := 0
+  word[ip_port]   := 0
+  word[readpos]   := 0
+  byte[handleidx] := $FF
+  password[0]     := 0
+  nickname[0]     := 0
+  username[0]     := 0
+  channel[0]      := 0
+  send_str[0]     := 0
+  focus           := 3
 
   ios.start                                             'ios initialisieren
+  ifnot (ios.admgetspec & LANMASK)
+    ios.print(string(10,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",10,"Bitte admnet laden.",10))
+    ios.stop
   setscreen
   conf_load
   if ip_addr == 0
@@ -208,25 +225,105 @@ PRI f_setconf | i,n
 
   conf_save
 
-PRI f_connect
+PRI f_connect | t
 
   ios.winset(2)
   ios.print(string(10,"Starte LAN..."))
   ios.lanstart
+  delay_ms(800) 'nach ios.lanstart dauert es, bis der Stack funktioniert
   ios.print(string(10,"Verbinde mit IRC-Server..."))
   if (handleidx := ios.lan_connect(ip_addr, ip_port)) == $FF
     ios.print(string(10,"Kein Socket frei!"))
     return(-1)
   ifnot (ios.lan_waitconntimeout(handleidx, 2000))
     ios.print(string(10,"Verbindung mit IRC-Server konnte nicht aufgebaut werden."))
+    f_close
     return(-1)
-  ios.print(string(10,"Verbindung mit IRC-Server hergestellt"))
+  ios.print(string(10,"Verbunden, warte auf Bereitschaft..."))
+
+'  t := cnt
+'  repeat until (cnt - t) / (clkfreq / 1000) > 5000
+'    irc_getline
+
+  irc_pass
+  irc_join
+
+PRI f_close
+
+  ifnot handleidx == $FF
+    ios.lan_close(handleidx)
+    handleidx := $FF
 
 PRI f_quit
 
+  f_close
   ios.winset(0)
   ios.screeninit
   ios.stop
+
+PRI f_input(key)| i
+
+  i := strsize(@send_str)
+  ios.winset(3)
+  if key == $0d
+    if sendStr(@send_str) || sendStr(string(13,10))
+      ios.printcls
+      ios.winset(1)
+      ios.printchar(10)
+      ios.print(@send_str)
+      byte[@send_str][0] := 0
+  if (key == ios#CHAR_BS)&(i>0)                             'backspace
+    ios.printbs
+    i--
+    byte[@send_str][i] := 0
+  elseif i < LEN_IRCLINE-2                                    'normales zeichen
+    ios.printchar(key)
+    byte[@send_str][i] := key
+    i++
+    byte[@send_str][i] := 0
+
+PRI irc_pass
+
+  ios.winset(2)
+  ios.print(string(10,"Sende Paßwort..."))
+  if sendStr(string("PASS ")) || sendStr(@password) || sendStr(string(13,10))
+    ios.print(string(10,"Fehler beim Senden des Paßwortes"))
+    return(-1)
+
+PRI irc_join
+
+  ios.winset(2)
+  ios.print(string(10,"Sende Nickname"))
+  if sendStr(string("NICK ")) || sendStr(@nickname) || sendStr(string(13,10))
+    ios.print(string(10,"Fehler beim Senden des Nicknamens"))
+    return(-1)
+
+  ios.print(string(", Benutzerinformationen"))
+  if sendStr(string("USER ")) || sendStr(@username) || sendStr(string(" 0 * :Hive #",13,10))
+    ios.print(string(10,"Fehler beim Senden des Nicknamens"))
+    return(-1)
+
+  ifnot strsize(@channel) == 0
+    ios.winset(2)
+    ios.print(string(" und verbinde mit Channel"))
+    if sendStr(string("JOIN ")) || sendStr(@channel) || sendStr(string(13,10))
+      ios.print(string(10,"Fehler beim Verbinden mit dem Channel"))
+      return(-1)
+
+PRI irc_getLine
+
+  if readLine(2000) 'vollständige Zeile empfangen
+
+    if str.findCharacters(@receive_str, string("PING :")) == @receive_str
+      ios.winset(2)
+      ios.print(string(10,"PING erhalten, sende PONG"))
+      receive_str[1] := "O"
+      sendStr(@receive_str)
+      sendStr(string(13,10))
+    else
+      ios.winset(1)
+      ios.printchar(10)
+      ios.print(@receive_str)
 
 PRI frame_draw
 
@@ -254,6 +351,8 @@ PRI win_draw | i
     ios.winoframe
     if i == focus
       ios.setcolor(COL_DEFAULT)
+    if i == 3
+      ios.curon
     ios.winset(0)
     ios.cursetx(2)
     ios.cursety(hy[i])
@@ -275,6 +374,8 @@ PRI win_redraw | i
     ios.winoframe
     if i == focus
       ios.setcolor(COL_DEFAULT)
+    if i == 3
+      ios.curon
     ios.winset(0)
     ios.cursetx(2)
     ios.cursety(hy[i])
@@ -414,8 +515,38 @@ PUB input(strdesc, strdef, input_len) | i,n
        byte[@input_str][i] := 0
   ios.curoff
 
+PRI readLine(timeout) : complete | ch
+
+  complete := FALSE
+  ifnot (ch := ios.lan_rxbyte(handleidx)) == -1
+    if readpos == 0                                '1. Zeichen einer Zeile empfangen
+      t1char := cnt
+    if (ch == 10) and receive_str[readpos-1] == 13 'Zeilenende
+      receive_str[readpos-1] := 0
+      readpos := 0
+      complete := TRUE
+      return(complete)
+    receive_str[readpos++] := ch
+    if readpos == LEN_IRCLINE-1                    'max. Zeilenlänge
+      receive_str[readpos] := 0
+      readpos := 0
+      complete := TRUE
+      return(complete)
+  if (readpos <> 0) and ((cnt - t1char) / (clkfreq / 1000) > timeout)     'Timeout seit Empfang 1. Zeichen
+      receive_str[readpos] := 0
+      readpos := 0
+      complete := TRUE
+
+PRI sendStr (strSend) : error
+
+'  ios.print(string(" > "))
+'  ios.print(strSend)
+'  ios.printnl
+  error := ios.lan_txdata(handleidx, strSend, strsize(strSend))
+
 PRI delay_ms(Duration)
-  waitcnt(((clkfreq / 1_000 * Duration - 3932)) + cnt)
+ waitcnt(clkfreq/1000*Duration + cnt)
+
 
 DAT
 
