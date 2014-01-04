@@ -1123,7 +1123,7 @@ PUB lan_rxtime(handleidx, timeout): rxbyte
 
 PUB lan_rxdata(handleidx, filename, len): error | fnr
 ''funktionsgruppe               : lan
-''funktion                      : bei bestehender Verbindung die angegebene Datenmenge empfangen
+''funktion                      : bei bestehender Verbindung die angegebene Datenmenge in File der RAM-Disk schreiben
 ''eingabe                       : -
 ''ausgabe                       : -
 ''busprotokoll                  : [078][put.handleidx][sub_putlong.len][get.byte1][get.byte<len>][get.error]
