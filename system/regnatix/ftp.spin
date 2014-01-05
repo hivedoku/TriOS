@@ -20,7 +20,9 @@ COG's           : -
 Logbuch         :
 
 22.12.2013-joergd - erste Version
-
+05.01.2014-joergd - Defaultwerte gesetzt
+                  - Speichern auf SD-Card
+                  - Parameter für Benutzer und Paßwort
 
 Kommandoliste   :
 
@@ -42,22 +44,37 @@ _XINFREQ     = 5_000_000
 
  LANMASK     = %00000000_00000000_00000000_00100000
 
+CON 'NVRAM Konstanten --------------------------------------------------------------------------
+
+#4,     NVRAM_IPADDR
+#8,     NVRAM_IPMASK
+#12,    NVRAM_IPGW
+#16,    NVRAM_IPDNS
+#20,    NVRAM_IPBOOT
+#24,    NVRAM_HIVE       ' 4 Bytes
+
 VAR
 
   long    ip_addr
   byte    parastr[64]
   byte    remdir[64]
   byte    filename[64]
+  byte    username[64]
+  byte    password[64]
   byte    strTemp[128]
   byte    addrset
+  byte    save2card
   byte    handleidx_control          'Handle FTP Control Verbindung
   byte    handleidx_data             'Handle FTP Data Verbindung
 
 PUB main
 
   ip_addr := 0
+  save2card := FALSE
   remdir[0] := 0
   filename[0] := 0
+  username[0] := 0
+  password[0] := 0
 
   ios.start
   ifnot (ios.admgetspec & LANMASK)
@@ -69,19 +86,23 @@ PUB main
     if byte[@parastr][0] == "/"                         'option?
       case byte[@parastr][1]
         "?": ios.print(@help)
-        "s": if ios.paranext(@parastr)
+        "f": if ios.paranext(@parastr)
                setaddr(@parastr)
         "v": ios.paranext(@remdir)
         "d": ios.paranext(@filename)
+        "u": ios.paranext(@username)
+        "p": ios.paranext(@password)
+        "s": save2card := TRUE
         other: ios.print(@help)
 
-  ifnot ftpconnect
-    ifnot ftplogin(string("anonymous"),string("password"))
-      ifnot byte[@remdir][0] == 0
+  ifnot byte[@filename][0] == 0
+    ifnot ftpconnect
+      ifnot ftplogin
         ftpcwd
-      ifnot byte[@filename][0] == 0
         if ftppasv
           ftpretr
+  else
+    ios.print(string("Keine Datei zum Downloaden angegeben, beende...",10))
 
 
   ftpclose
@@ -90,28 +111,27 @@ PUB main
 PRI ftpconnect
 
   ifnot (ip_addr)  ' Adresse 0.0.0.0
-    ios.print(string("FTP-Server nicht angegeben (Parameter /s)"))
-    ios.printnl
-    return(-1)
-  ios.print(string("Starte LAN..."))
-  ios.printnl
+    ios.print(string("FTP-Server nicht angegeben (Parameter /s)",10))
+    ip_addr := ios.getNVSRAM(NVRAM_IPBOOT) << 24
+    ip_addr += ios.getNVSRAM(NVRAM_IPBOOT+1) << 16
+    ip_addr += ios.getNVSRAM(NVRAM_IPBOOT+2) << 8
+    ip_addr += ios.getNVSRAM(NVRAM_IPBOOT+3)
+    if (ip_addr)
+      ios.print(string("Verwende Boot-Server (mit ipconfig gesetzt).",10))
+    else
+      return(-1)
+  ios.print(string("Starte LAN...",10))
   ios.lanstart
-  delay_ms(800) 'nach ios.lanstart dauert es, bis der Stack funktioniert
-  ios.print(string("Verbinde mit FTP-Server..."))
-  ios.printnl
+  ios.print(string("Verbinde mit FTP-Server...",10))
   if (handleidx_control := ios.lan_connect(ip_addr, 21)) == $FF
-    ios.print(string("Kein Socket frei..."))
-    ios.printnl
+    ios.print(string("Kein Socket frei...",10))
     return(-1)
   ifnot (ios.lan_waitconntimeout(handleidx_control, 2000))
-    ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden."))
-    ios.printnl
+    ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden.",10))
     return(-1)
-  ios.print(string("Verbindung mit FTP-Server hergestellt, warte auf Antwort..."))
-  ios.printnl
+  ios.print(string("Verbindung mit FTP-Server hergestellt, warte auf Antwort...",10))
   ifnot getResponse(string("220 "))
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten.",10))
     return(-1)
   return(0)
 
@@ -124,17 +144,17 @@ PRI ftpclose
     ios.lan_close(handleidx_data)
     handleidx_data := $FF
 
-PRI ftplogin(username, password) | pwreq, respOK
+PRI ftplogin | pwreq, respOK, hiveid
 
   pwreq := FALSE
   respOK := FALSE
 
-  ifnot strsize(username)
-    username := string("anonymous")
-  if sendStr(string("USER ")) || sendStr(username) || sendStr(string(13,10))
-    ios.print(string("Fehler beim Senden des Usernamens"))
-    ios.printnl
-    return(-1)
+  sendStr(string("USER "))
+  if strsize(@username)
+    sendStr(@username)
+    sendStr(string(13,10))
+  else
+    sendStr(string("anonymous",13,10))
 
   repeat until readLine == -1
     ios.print(string(" < "))
@@ -149,33 +169,42 @@ PRI ftplogin(username, password) | pwreq, respOK
       respOk := TRUE
       quit
   ifnot respOK
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten.",10))
     return(-1)
 
   ifnot pwreq
     return(0)
 
-  if sendStr(string("PASS ")) || sendStr(password) || sendStr(string(13,10))
-    ios.print(string("Fehler beim Senden des Passworts"))
-    ios.printnl
-    return(-1)
+  sendStr(string("PASS "))
+  if strsize(@password)
+    sendStr(@password)
+    sendStr(string(13,10))
+  else
+    hiveid := ios.getNVSRAM(NVRAM_HIVE)
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+1) << 8
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+2) << 16
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+3) << 24
+    sendStr(string("anonymous@hive"))
+    sendStr(str.trimCharacters(num.ToStr(hiveid, num#DEC)))
+    sendStr(string(13,10))
+
   ifnot getResponse(string("230 "))
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten.",10))
     return(-1)
 
   return(0)
 
-PRI ftpcwd
+PRI ftpcwd | i
 
-  if sendStr(string("CWD ")) || sendStr(@remdir) || sendStr(string(13,10))
-    ios.print(string("Fehler beim Senden des Verzeichnisses"))
-    ios.printnl
+  if byte[@remdir][0] == 0
+    i := sendStr(string("CWD ")) || sendStr(@defdir) || sendStr(string(13,10))
+  else
+    i := sendStr(string("CWD ")) || sendStr(@remdir) || sendStr(string(13,10))
+  if i
+    ios.print(string("Fehler beim Senden des Verzeichnisses",10))
     return(-1)
   ifnot getResponse(string("250 "))
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten.",10))
     return(-1)
   return(0)
 
@@ -212,45 +241,38 @@ PRI ftppasv : port | i, k, port256, port1
       quit
 
   if (port == 0)
-    ios.print(string("FTP-Server-Fehler beim Öffnen des Passiv-Ports"))
-    ios.printnl
+    ios.print(string("FTP-Server-Fehler beim Öffnen des Passiv-Ports",10))
     return(0)
   ios.print(string("Öffne Verbindung zu Passiv-Port "))
   ios.print(num.ToStr(port, num#DEC))
   ios.printnl
   if (handleidx_data := ios.lan_connect(ip_addr, port)) == $FF
-    ios.print(string("Kein Socket frei..."))
-    ios.printnl
+    ios.print(string("Kein Socket frei...",10))
     return(0)
   ifnot (ios.lan_waitconntimeout(handleidx_data, 2000))
-    ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden."))
-    ios.printnl
+    ios.print(string("Verbindung mit FTP-Server konnte nicht aufgebaut werden.",10))
     return(0)
 
 PRI ftpretr | len, respOK
 
   if sendStr(string("TYPE I",13,10))
-    ios.print(string("Fehler beim Senden des Types"))
-    ios.printnl
+    ios.print(string("Fehler beim Senden des Types",10))
     return(-1)
   ifnot getResponse(string("200 "))
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten.",10))
     return(-1)
 
   if sendStr(string("SIZE ")) || sendStr(@filename) || sendStr(string(13,10))
-    ios.print(string("Fehler beim Senden des SIZE-Kommandos"))
-    ios.printnl
+    ios.print(string("Fehler beim Senden des SIZE-Kommandos",10))
     return(-1)
   ifnot getResponse(string("213"))
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten.",10))
     return(-1)
   ifnot(len := num.FromStr(@strTemp+4, num#DEC))
     return(-1)
 
   if sendStr(string("RETR ")) || sendStr(@filename) || sendStr(string(13,10))
-    ios.print(string("Fehler beim Senden des Filenamens"))
+    ios.print(string("Fehler beim Senden des Filenamens",10))
     return -1
   respOK := FALSE
   repeat until readLine == -1
@@ -265,19 +287,34 @@ PRI ftpretr | len, respOK
       respOk := TRUE
       quit
   ifnot respOK
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten.",10))
     return(-1)
 
   if ios.lan_rxdata(handleidx_data, @filename, len)
-    ios.print(string("Fehler beim Empfang der Datei."))
-    ios.printnl
+    ios.print(string("Fehler beim Empfang der Datei.",10))
     return(-1)
 
   ifnot getResponse(string("226 "))
-    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten."))
-    ios.printnl
+    ios.print(string("Keine oder falsche Antwort vom FTP-Server erhalten.",10))
     return(-1)
+
+  if save2card
+    writeToSDCard
+    ios.print(string("Speichere auf SD-Card...",10))
+
+PRI writeToSDCard | fnr, len, i
+
+  fnr := ios.rd_open(@filename)
+  ifnot fnr == -1
+    len := ios.rd_len(fnr)
+    ios.sddel(@filename)                                   'falls alte Datei auf SD-Card vorhanden, diese löschen
+    ifnot ios.sdnewfile(@filename)
+      ifnot ios.sdopen("W",@filename)
+        i := 0
+        ios.sdxputblk(fnr,len)                          'daten als block schreiben
+        ios.sdclose
+        ios.rd_del(@filename)
+    ios.rd_close(fnr)
 
 PRI setaddr (ipaddr) | pos, count                       'IP-Adresse in Variable schreiben
 
@@ -327,16 +364,20 @@ PRI sendStr (strSend) : error
   ios.printnl
   error := ios.lan_txdata(handleidx_control, strSend, strsize(strSend))
 
-PRI delay_ms(Duration)
-  waitcnt(((clkfreq / 1_000 * Duration - 3932)) + cnt)
+DAT
 
-DAT                                                     'sys: helptext
-
-
-help          byte  "/?              : Hilfe",13
-              byte  "/s <a.b.c.d>    : Server-Adresse",13
-              byte  "/v <verzeichnis>: in entferntes Verzeichnis wechseln",13
-              byte  "/d <filename>   : Download <filename>",13
+defdir        byte  "/hive/sdcard/system",0
+help          byte  "/?              : Hilfe",10
+              byte  "/f <a.b.c.d>    : FTP-Server-Adresse",10
+              byte  "                  (default: mit ipconfig gesetzter Boot-Server)",10
+              byte  "/v <verzeichnis>: in entferntes Verzeichnis wechseln",10
+              byte  "                  (default: /hive/sdcard/system)",10
+              byte  "/d <dateiname>  : Download <dateiname>",10
+              byte  "/u <username>   : Benutzername am FTP-Server",10
+              byte  "                  (default: anonymous)",10
+              byte  "/p <password>   : Paßwort am FTP-Server",10
+              byte  "                  (default: anonymous@hive<Hive-Id>)",10
+              byte  "/s              : Datei auf SD-Card speichern",10
               byte  0
 
 DAT                                                     'lizenz

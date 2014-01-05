@@ -300,6 +300,7 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_lanRXData: lan_rxdata                      'Daten aus Empfangspuffer lesen
         gc#a_lanTXData: lan_txdata                      'Daten senden
         gc#a_lanRXByte: lan_rxbyte                      'wenn vorhanden, Byte aus Empfangspuffer lesen
+        gc#a_lanIsConnected: lan_isconnected            'TRUE, wenn Socket verbunden, sonst FALSE
 
 '       ----------------------------------------------  CHIP-MANAGMENT
         gc#a_mgrGetSpec: mgr_getspec                    'spezifikation abfragen
@@ -1347,6 +1348,17 @@ PRI lan_rxbyte
 ''                              :             sock#RETBUFFEREMPTY (-1) wenn kein Zeichen vorhanden
 
   bus_putchar(sock.readByteNonBlocking(sockhandle[bus_getchar]))
+
+PRI lan_isconnected
+''funktionsgruppe               : lan
+''funktion                      : Returns true if the socket is connected, false otherwise
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [081][get.handleidx][put.connected]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : connected - TRUE wenn verbunden, sonst FALSE
+
+  bus_putchar(sock.isConnected(sockhandle[bus_getchar]))
 
 DAT
                 long                                    ' long alignment for addresses

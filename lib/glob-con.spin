@@ -173,7 +173,8 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_lanRXTime                                     'bestimmte Zeit warten auf Byte aus Empfangspuffer
         a_lanRXData                                     'Daten aus Empfangspuffer lesen
         a_lanTXData                                     'Daten senden
-        a_lanRXByte '80                                 'wenn vorhanden, Byte aus Empfangspuffer lesen
+        a_lanRXByte                                     'wenn vorhanden, Byte aus Empfangspuffer lesen
+        a_lanIsConnected '81                            'TRUE, wenn Socket verbunden, sonst FALSE
 
 '       ----------------------------------------------  CHIP-MANAGMENT
 #92,    a_mgrSetSound                                   'soundsubsysteme verwalten

@@ -20,7 +20,7 @@ COG's           : -
 Logbuch         :
 
 11.06.2013-joergd - erste Version, basierend auf time.spin
-
+05.01.2014-joergd - kleine Verbesserungen im Parameter-Handling
 
 Kommandoliste   :
 
@@ -33,12 +33,14 @@ Notizen         :
 OBJ
         ios: "reg-ios"
         str: "glob-string"
-        num: "glob-numbers"        'Number Engine
+        num: "glob-numbers"
 
 CON
 
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
+
+ LANMASK     = %00000000_00000000_00000000_00100000
 
 CON 'NVRAM Konstanten --------------------------------------------------------------------------
 
@@ -57,6 +59,8 @@ PUB main
 
   ios.start                                             'ios initialisieren
   ios.printnl
+  ifnot (ios.admgetspec & LANMASK)
+    ios.print(string("WARNUNG!",10,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",10,"Bitte admnet laden.",10,"(ipconfig funktioniert trotzdem)",10))
   ios.parastart                                         'parameterübergabe starten
   repeat while ios.paranext(@parastr)                   'parameter einlesen
     if byte[@parastr][0] == "/"                         'option?
@@ -99,21 +103,21 @@ PRI cmd_listcfg | hiveid                                       'nvram: IP-Konfig
   ios.printnl
 
   ios.print(string(" Hive-Id:     "))
-  hiveid :=          ios.getNVSRAM(NVRAM_HIVE)
-  hiveid := hiveid + ios.getNVSRAM(NVRAM_HIVE+1) << 8
-  hiveid := hiveid + ios.getNVSRAM(NVRAM_HIVE+2) << 16
-  hiveid := hiveid + ios.getNVSRAM(NVRAM_HIVE+3) << 24
+  hiveid := ios.getNVSRAM(NVRAM_HIVE)
+  hiveid += ios.getNVSRAM(NVRAM_HIVE+1) << 8
+  hiveid += ios.getNVSRAM(NVRAM_HIVE+2) << 16
+  hiveid += ios.getNVSRAM(NVRAM_HIVE+3) << 24
   ios.print(str.trimCharacters(num.ToStr(hiveid, num#DEC)))
   ios.printnl
 
-PRI listaddr (nvidx) | count                                  'nvram: IP-Adresse setzen
+PRI listaddr (nvidx) | count                                  'IP-Adresse anzeigen
 
   repeat count from 0 to 3
     if(count)
       ios.print(string("."))
     ios.print(str.trimCharacters(num.ToStr(ios.getNVSRAM(nvidx+count), num#DEC)))
 
-PRI cmd_setaddr (nvidx, ipaddr) | pos, count                  'nvram: IP-Adresse setzen
+PRI cmd_setaddr (nvidx, ipaddr) | pos, count                  'IP-Adresse setzen
 
   count := 0
   repeat while ipaddr
@@ -125,30 +129,30 @@ PRI cmd_setaddr (nvidx, ipaddr) | pos, count                  'nvram: IP-Adresse
     if(count == 4)
       quit
 
+  ios.lanstop
   ios.lanstart
-  cmd_listcfg
 
-PRI cmd_sethive (hiveid)                                       'nvram: IP-Adresse setzen
+PRI cmd_sethive (hiveid)                                       'Hive-Id setzen
 
   ios.setNVSRAM(NVRAM_HIVE, hiveid & $FF)
   ios.setNVSRAM(NVRAM_HIVE+1, (hiveid >> 8) & $FF)
   ios.setNVSRAM(NVRAM_HIVE+2, (hiveid >> 16) & $FF)
   ios.setNVSRAM(NVRAM_HIVE+3, (hiveid >> 24) & $FF)
 
+  ios.lanstop
   ios.lanstart
-  cmd_listcfg
 
 DAT                                                     'sys: helptext
 
 
-help          byte  "/?  :          Hilfe",13
-              byte  "/l  :          Konfiguration anzeigen",13
-              byte  "/a <a.b.c.d> : IP-Adresse setzen",13
-              byte  "/m <x.x.x.x> : Netzwerk-Maske setzen",13
-              byte  "/g <e.f.g.h> : Gateway setzen",13
-              byte  "/d <i.j.k.l> : DNS-Server setzen",13
-              byte  "/b <m.n.o.p> : Boot-Server setzen",13
-              byte  "/i <Id> :      Hive-Id setzen",13
+help          byte  "/?           : Hilfe",10
+              byte  "/l           : Konfiguration anzeigen",10
+              byte  "/a <a.b.c.d> : IP-Adresse setzen",10
+              byte  "/m <x.x.x.x> : Netzwerk-Maske setzen",10
+              byte  "/g <e.f.g.h> : Gateway setzen",10
+              byte  "/d <i.j.k.l> : DNS-Server setzen",10
+              byte  "/b <m.n.o.p> : Boot-Server setzen",10
+              byte  "/i <Id> :      Hive-Id setzen",10
               byte  0
 
 DAT                                                     'lizenz

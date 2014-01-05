@@ -259,7 +259,6 @@ PRI f_connect | t
   ios.winset(2)
   ios.print(string(10,"Starte LAN..."))
   ios.lanstart
-  waitcnt(cnt + clkfreq) '1sek warten (nach ios.lanstart dauert es, bis der Stack funktioniert)
   ios.print(string(10,"Verbinde mit IRC-Server..."))
   if (handleidx := ios.lan_connect(ip_addr, ip_port)) == $FF
     ios.print(string(10,"Kein Socket frei!"))

@@ -1036,6 +1036,8 @@ PUB lanstart                                            'LAN starten
 ''busprotokoll                  : [071]
 
   bus_putchar1(gc#a_lanStart)
+  waitcnt(cnt + clkfreq)        '1sek warten (nach ios.lanstart dauert es, bis der Stack funktioniert)
+
 
 PUB lanstop                                             'LAN beenden
 ''funktionsgruppe               : lan
@@ -1045,6 +1047,7 @@ PUB lanstop                                             'LAN beenden
 ''busprotokoll                  : [072]
 
   bus_putchar1(gc#a_lanStop)
+  waitcnt(cnt + clkfreq)        '1sek warten, bis in Administra wirklich beendet
 
 PUB lan_connect(ipaddr, remoteport): handleidx
 ''funktionsgruppe               : lan
@@ -1132,6 +1135,7 @@ PUB lan_rxdata(handleidx, filename, len): error | fnr
 ''                              : len                 - Anzahl zu empfangende Bytes
 ''                              : error               - ungleich Null bei Fehler
 
+  rd_del(filename)              'File aus RAM-Disk löschen (falls vorhanden)
   rd_newfile(filename,len)
   fnr := rd_open(filename)
   ifnot fnr == -1
@@ -1181,6 +1185,20 @@ PUB lan_rxbyte(handleidx): rxbyte
   bus_putchar1(handleidx)
   rxbyte := bus_getchar1
   rxbyte := ~rxbyte
+
+PUB lan_isconnected(handleidx): connected
+''funktionsgruppe               : lan
+''funktion                      : TRUE, wenn Socket verbunden, sonst FALSE
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [081][sub_putlong.handleidx]][get.connected]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : connected - TRUE, wenn Socket verbunden, sonst FALSE
+
+  bus_putchar1(gc#a_lanIsConnected)
+  bus_putchar1(handleidx)
+  connected := bus_getchar1
+  connected := ~connected
 
 CON ''------------------------------------------------- Hydra Sound System
 
