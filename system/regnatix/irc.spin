@@ -496,16 +496,38 @@ PRI printTime
   ios.print(str.trimCharacters(str.numberToDecimal(ios.getMinutes, 2)))
   ios.printchar("]")
 
-PRI printChatStr(chanstr, nickstr, msgstr)
+PRI printChatStr(chanstr, nickstr, msgstr) | channicklen, msglineend, ch, space
 
   ios.winset(1)
   ios.printnl
   printTime
-  ios.print(nickstr)
-  ios.printchar(">")
   ios.print(chanstr)
+  ios.printchar(">")
+  ios.print(nickstr)
   ios.print(string(": "))
-  ios.print(msgstr)
+  channicklen := strsize(chanstr) + strsize(nickstr) + 10
+  msglineend := cols - channicklen -2
+  repeat
+    if strsize(msgstr) =< msglineend               'msgline paßt auf Zeile
+      ios.print(msgstr)
+      quit
+    else                                           'msgline muß umgebrochen werden
+      ch := byte[msgstr][msglineend]               'Zeichen am Zeilenende sichern
+      byte[msgstr][msglineend] := 0                'Messagestring am Zeilenende abschließen
+      if (space := findCharacterBack(msgstr, " ")) 'wenn letztes Leerzeichen in msgstr gefunden
+        byte[msgstr][msglineend] := ch             'Zeichen am Zeilenende wieder einfügen
+        byte[space] := 0                           'msgstr am letzten Leerzeichen abschließen
+        ios.print(msgstr)                          'und anzeigen
+        ios.printnl                                'nächste Zeile
+      else
+        ios.print(msgstr)                          'hier wird kein printnl gebraucht
+      repeat channicklen                           '"Tab" bis Ende Anzeige Channel + Nickname
+        ios.printchar(" ")
+      if space
+        msgstr := space + 1
+      else
+        ios.printchar(ch)                          'am Zeilenende entferntes Zeichen hier anzeigen
+        msgstr += msglineend + 1
 
 PRI strToIpPort(ipstr, ip, port) | octet
   ' extracts the IP and PORT from a string
@@ -623,6 +645,25 @@ PRI sendStr (strSend) : error
 '  ios.print(strSend)
 '  ios.printnl
   error := ios.lan_txdata(handleidx, strSend, strsize(strSend))
+
+PUB findCharacterBack(charactersToSearch, characterToFind) | i
+
+'' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+'' │ Searches a string of characters for the last occurence of the specified character.                                      │
+'' │                                                                                                                          │
+'' │ Returns the address of that character if found and zero if not found.                                                    │
+'' │                                                                                                                          │
+'' │ CharactersToSearch - A pointer to the string of characters to search.                                                    │
+'' │ CharacterToFind    - The character to find in the string of characters to search.                                        │
+'' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  i := strsize(charactersToSearch)
+
+  repeat i
+    if(byte[charactersToSearch][--i] == characterToFind)
+      return charactersToSearch + i
+
+  return 0
 
 DAT
 
