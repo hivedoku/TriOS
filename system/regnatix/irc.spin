@@ -49,14 +49,19 @@ W0X_MENU        = 8
 W0Y_MENU        = 0
 
 COL_DEFAULT     = 0
-COL_MENU        = 8
 COL_FOCUS       = 3
+COL_MARK        = 5
+COL_MENU        = 8
 
 LEN_PASS        = 32
 LEN_NICK        = 32
 LEN_USER        = 32
 LEN_CHAN        = 32
 LEN_IRCLINE     = 512
+
+MAX_LINES_WIN1  = 1000  ' maximale Zeilenanzahl im Puffer für Fenster 1 (Chat)
+MAX_LINES_WIN2  = 1000  ' maximale Zeilenanzahl im Puffer für Fenster 2 (Status)
+MAX_LINES_WIN3  = 100   ' maximale Zeilenanzahl im Puffer für Fenster 3 (Eingabe)
 
 CON 'NVRAM Konstanten --------------------------------------------------------------------------
 
@@ -72,15 +77,20 @@ VAR
   long  t1char                                'Empfangs-Zeitpunkt des 1. Zeichen einer Zeile
   long  ip_addr
   long  hiveid
+  long  bufstart[4]
+  word  buflinenr[4]
+  word  scrolllinenr[4]
   word  ip_port
   word  readpos
   word  sendpos
   byte  handleidx                             'Handle-Nummer IRC Verbindung
   byte  rows,cols,vidmod
-  byte  x0[4],y0[4],xn[4],yn[4],hy[4],focus
+  byte  x0[4], y0[4], xn[4], yn[4], hy[4], buflinelen, focus
   byte  password[LEN_PASS+1],nickname[LEN_NICK+1],username[LEN_USER+1],channel[LEN_CHAN+1]
   byte  input_str[64]
-  byte  temp_str[64]
+  byte  temp_str[256]
+  byte  print_str[256]
+  byte  print_str_ptr
   byte  send_str[LEN_IRCLINE]
   byte  receive_str[LEN_IRCLINE]
 
@@ -121,6 +131,7 @@ PRI init
   ifnot (ios.admgetspec & LANMASK)
     ios.print(string(10,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",10,"Bitte admnet laden.",10))
     ios.stop
+  ios.print(string(10,"Initialisiere, bitte warten...",10))
   setscreen
   conf_load
   if ip_addr == 0
@@ -193,15 +204,32 @@ PRI f_focus
   if ++focus == 4
     focus := 1
   win_redraw
-PRI f_scrollup
+PRI f_scrollup | lineAddr, lineNum
 
-  ios.winset(focus)
-  ios.scrollup
+  if scrolllinenr > 0
+    ios.winset(focus)
+    ios.scrollup
 
-PRI f_scrolldown
+    lineNum := buflinenr[focus] - ++scrolllinenr[focus]                             'Nummer hereinngescrollte neue Zeile
+    lineAddr := bufstart[focus] + (lineNum * buflinelen)                            'Adresse im eRAM (Usermode)
 
-  ios.winset(focus)
-  ios.scrolldown
+    printBufWin(lineAddr, focus)
+
+PRI f_scrolldown | lineAddr, lineNum, linemax
+
+  case focus
+    1: linemax := MAX_LINES_WIN1
+    2: linemax := MAX_LINES_WIN2
+    3: linemax := MAX_LINES_WIN3
+
+  if scrolllinenr < linemax
+    ios.winset(focus)
+    ios.scrolldown
+
+    lineNum := buflinenr[focus] - ++scrolllinenr[focus] - yn[focus] + y0[focus] + 2 'Nummer hereinngescrollte neue Zeile
+    lineAddr := bufstart[focus] + (lineNum * buflinelen)                            'Adresse im eRAM (Usermode)
+
+    printBufWin(lineAddr, focus)
 
 PRI f_setconf | i,n
 
@@ -250,7 +278,7 @@ PRI f_setconf | i,n
       n := input_str[i]
       channel[i] := n
 
-  win_redraw
+  win_contentRefresh
 
   conf_save
 
@@ -348,7 +376,7 @@ PRI irc_getLine | i, nickstr, chanstr, msgstr
         msgstr++
         nickstr := @receive_str[1]
           if str.replaceCharacter(nickstr, "!", 0)
-            printChatStr(chanstr, nickstr, msgstr)
+            handleChatStr(chanstr, nickstr, msgstr, FALSE)
     elseif str.findCharacters(@receive_str, string("PING :")) == @receive_str 'PING
       ios.winset(2)
       ios.print(string(10,"PING erhalten, sende PONG"))
@@ -371,7 +399,7 @@ PRI irc_putLine | i
       sendStr(string(" :"))
       sendStr(i)
       sendStr(string(13,10))
-      printChatStr(@send_str[5], @nickname, i)
+      handleChatStr(@send_str[5], @nickname, i, TRUE)
   elseif send_str[0] == "/"                                  'anderes IRC-Kommando an Server
       sendStr(@send_str[1])
       sendStr(string(13,10))
@@ -384,7 +412,7 @@ PRI irc_putLine | i
     sendStr(string(" :"))
     sendStr(@send_str)
     sendStr(string(13,10))
-    printChatStr(@channel, @nickname, @send_str)
+    handleChatStr(@channel, @nickname, @send_str, TRUE)
 
 PRI frame_draw
 
@@ -449,11 +477,41 @@ PRI win_redraw | i
     if i == focus
       ios.setcolor(COL_DEFAULT)
 
-PRI setscreen
+PRI win_contentRefresh | win, lines, lineNum
+'' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+'' │ Fensterinhalt neu aufbauen                                                                                               │
+'' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  vidmod := ios.belgetspec & 1
-  rows := ios.belgetrows                                'zeilenzahl bei bella abfragen
-  cols := ios.belgetcols                                'spaltenzahl bei bella abfragen
+''  repeat win from 1 to 2
+  repeat win from 1 to 1
+    lines := yn[win] - y0[win] + 1  '???
+    if buflinenr[win] => lines
+      lineNum := buflinenr[win] - lines                                 'Nummer erste anzuzeigende Zeile
+    else
+      case win
+        1: lineNum := MAX_LINES_WIN1 + buflinenr[win] - lines
+        2: lineNum := MAX_LINES_WIN2 + buflinenr[win] - lines
+    ios.winset(win)
+    ios.printcls
+    printBufWin(bufstart[win] + (lineNum * buflinelen), win)
+    repeat lines - 1
+      lineNum++
+      if lineNum == MAX_LINES_WIN1
+        lineNum := 0
+      ios.printnl
+      printBufWin(bufstart[win] + (lineNum * buflinelen), win)
+    win++
+
+PRI setscreen | buflen[4], i
+
+  vidmod     := ios.belgetspec & 1
+  rows       := ios.belgetrows                                'zeilenzahl bei bella abfragen
+  cols       := ios.belgetcols                                'spaltenzahl bei bella abfragen
+  buflinelen := cols + 20                                     'Länge einer Zeile im Fensterpuffer
+
+  print_str[0] := 0                                           'leerer print_str (zum Leeren Fensterpuffer)
+  print_str[1] := 0
+  print_str[2] := 0
 
   'gesamter Bildschirm (Nr. 0)
   x0[0] := 0
@@ -467,6 +525,12 @@ PRI setscreen
   xn[1] := cols-2
   yn[1] := rows-9
   hy[1] := 1
+  buflinenr[1]    := 0
+  scrolllinenr[1] := 0
+  bufstart[1]     := 0
+  buflen[1]       := buflinelen * MAX_LINES_WIN1
+  repeat i from 0 to MAX_LINES_WIN1 - 1             'Fensterpuffer leeren
+    printStrBuf(1)
 
   'Status-Fenster (Nr. 2)
   x0[2] := 1
@@ -474,6 +538,12 @@ PRI setscreen
   xn[2] := cols-2
   yn[2] := rows-4
   hy[2] := rows-8
+  buflinenr[2]    := 0
+  scrolllinenr[2] := 0
+  bufstart[2]     := bufstart[1] + buflen[1]
+  buflen[2]       := buflinelen * MAX_LINES_WIN2
+  repeat i from 0 to MAX_LINES_WIN2 - 1             'Fensterpuffer leeren
+    printStrBuf(2)
 
   'Eingabe-Fenster (Nr. 3)
   x0[3] := 1
@@ -481,6 +551,12 @@ PRI setscreen
   xn[3] := cols-2
   yn[3] := rows-2
   hy[3] := rows-3
+  buflinenr[3]    := 0
+  scrolllinenr[3] := 0
+  bufstart[3]     := bufstart[2] + buflen[2]
+  buflen[3]       := buflinelen * MAX_LINES_WIN3
+  repeat i from 0 to MAX_LINES_WIN3 - 1             'Fensterpuffer leeren
+    printStrBuf(3)
 
   frame_draw
   win_draw
@@ -488,46 +564,145 @@ PRI setscreen
   'Eingabe-Fenster (Nr. 4)
   ios.windefine(4,13,10,47,13)
 
-PRI printTime
+PRI printTime | timeStr, i
+'' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+'' │ aktuelle Zeit in print_str schreiben                                                                                     │
+'' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  ios.printchar("[")
-  ios.print(str.trimCharacters(str.numberToDecimal(ios.getHours, 2)))
-  ios.printchar(":")
-  ios.print(str.trimCharacters(str.numberToDecimal(ios.getMinutes, 2)))
-  ios.printchar("]")
+  print_str[print_str_ptr++] := "["
+  timeStr := str.trimCharacters(str.numberToDecimal(ios.getHours, 2))
+  repeat i from 0 to 1
+    print_str[print_str_ptr++] := byte[timeStr][i]
+  print_str[print_str_ptr++] := ":"
+  timeStr := str.trimCharacters(str.numberToDecimal(ios.getMinutes, 2))
+  repeat i from 0 to 1
+    print_str[print_str_ptr++] := byte[timeStr][i]
+  print_str[print_str_ptr++] := "]"
 
-PRI printChatStr(chanstr, nickstr, msgstr) | channicklen, msglineend, ch, space
+PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, channicklen, msglineend,       ch, space
+'' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+'' │ Chat-zeile erstellen, anzeigen und in Puffer schreiben                                                                   │
+'' |                                                                                                                          |
+'' | Aufbau: <Farbbyte1><String1>0<Farbbyte2><String2>0 ... <FarbbyteN><StringN>000                                            |
+'' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
   ios.winset(1)
-  ios.printnl
+  print_str_ptr := 0         ' String neu beginnen
+
+  '1. Teilstring: Zeit
+  print_str[print_str_ptr++] := COL_MENU     'Farbbyte
   printTime
-  ios.print(chanstr)
-  ios.printchar(">")
-  ios.print(nickstr)
-  ios.print(string(": "))
+  print_str[print_str_ptr++] := 0
+
+ '2. Teilstring: Channel
+  print_str[print_str_ptr++] := COL_DEFAULT  'Farbbyte
+  repeat i from 0 to strsize(chanstr)        'Länge Channel inkl. Abschluß-Null
+    print_str[print_str_ptr++] := byte[chanstr][i]
+
+ '3. Teilstring: Nickname
+  if me
+    print_str[print_str_ptr++] := COL_MARK   'Farbbyte
+  else
+    print_str[print_str_ptr++] := COL_FOCUS   'Farbbyte
+  print_str[print_str_ptr++] := ">"
+  repeat i from 0 to strsize(nickstr)        'Länge Nickname inkl. Abschluß-Null
+    print_str[print_str_ptr++] := byte[nickstr][i]
+
+ '3. Teilstring: 1. Teil  der Mitteilung
+  if me
+    print_str[print_str_ptr++] := COL_MARK    'Farbbyte
+  else
+    print_str[print_str_ptr++] := COL_DEFAULT 'Farbbyte
+  print_str[print_str_ptr++] := ":"
+  print_str[print_str_ptr++] := " "
   channicklen := strsize(chanstr) + strsize(nickstr) + 10
   msglineend := cols - channicklen -2
   repeat
-    if strsize(msgstr) =< msglineend               'msgline paßt auf Zeile
-      ios.print(msgstr)
+    if strsize(msgstr) =< msglineend          'msgline paßt auf Zeile
+      repeat i from 0 to strsize(msgstr)      'Länge Mitteilung inkl. Abschluß-Null
+        print_str[print_str_ptr++] := byte[msgstr][i]
+      print_str[print_str_ptr++] := 0         'komplette Chat-Zeile fertig
+      print_str[print_str_ptr] := 0
+      print_str_ptr := 0
+      ios.printnl
+      printStrWin(@print_str, 1)
+      printStrBuf(1)
       quit
-    else                                           'msgline muß umgebrochen werden
+    else                                      'msgline muß umgebrochen werden
       ch := byte[msgstr][msglineend]               'Zeichen am Zeilenende sichern
       byte[msgstr][msglineend] := 0                'Messagestring am Zeilenende abschließen
       if (space := findCharacterBack(msgstr, " ")) 'wenn letztes Leerzeichen in msgstr gefunden
         byte[msgstr][msglineend] := ch             'Zeichen am Zeilenende wieder einfügen
         byte[space] := 0                           'msgstr am letzten Leerzeichen abschließen
-        ios.print(msgstr)                          'und anzeigen
-        ios.printnl                                'nächste Zeile
-      else
-        ios.print(msgstr)                          'hier wird kein printnl gebraucht
+        repeat i from 0 to strsize(msgstr)         'und in print_str schreiben
+          print_str[print_str_ptr++] := byte[msgstr][i]
+        print_str[print_str_ptr++] := 0            'komplette Chat-Zeile fertig, weitere folgt
+        print_str[print_str_ptr] := 0
+        print_str_ptr := 0
+        ios.printnl
+        printStrWin(@print_str, 1)
+        printStrBuf(1)
+      else                                         'kein einziges Leerzeichen
+        repeat i from 0 to strsize(msgstr)         'in print_str schreiben
+          print_str[print_str_ptr++] := byte[msgstr][i]
+        print_str[print_str_ptr++] := 0            'komplette Chat-Zeile fertig, weitere folgt
+        print_str[print_str_ptr] := 0
+        print_str_ptr := 0
+        ios.printnl
+        printStrWin(@print_str, 1)
+        printStrBuf(1)
+      print_str[print_str_ptr++] := COL_DEFAULT    'nach Zeilenumbruch beginnz neue Zeile wieder mit Farbbyte
       repeat channicklen                           '"Tab" bis Ende Anzeige Channel + Nickname
-        ios.printchar(" ")
+        print_str[print_str_ptr++] := " "
       if space
         msgstr := space + 1
       else
-        ios.printchar(ch)                          'am Zeilenende entferntes Zeichen hier anzeigen
+        print_str[print_str_ptr++] := ch           'am Zeilenende entferntes Zeichen hier einfügen
         msgstr += msglineend + 1
+
+PRI printStrWin(printStr, win) | i
+'' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+'' │ Chat-Zeile anzeigen                                                                                   │
+'' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ios.winset(1)
+
+  i := 0
+  repeat
+    if byte[printStr][i] == 0 and byte[printStr][i+1] == 0 'nichts mehr anzuzeigen, Ende
+      quit
+    ios.setcolor(byte[printStr][i++])                      'ersten Byte vom Teilstring ist die Farbe
+    ios.print(printStr + i)                                'restlichen String anzeigen
+    i += strsize(printStr + i) + 1                        'i zeigt auf nächsten Teilstring
+
+
+PRI printStrBuf(win) | lineAddr, i
+'' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+'' │ Chat-Zeile in Fenster-Puffer schreiben                                                                                   │
+'' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  lineAddr := bufstart[1] + (buflinenr[1]++ * buflinelen)         'Adresse Zeilenbeginn im eRAM (Usermode)
+  if buflinenr[1] == MAX_LINES_WIN1
+    buflinenr[1] := 0
+
+  i := 0
+  repeat
+    ios.ram_wrbyte(1,print_str[i],lineAddr++)
+    if print_str[i] == 0 and print_str[i+1] == 0 and print_str[i+2] == 0    'Ende Teilstring und Ende Komplettstring
+      ios.ram_wrbyte(1,0,lineAddr++)                                        'auch Abschluß-Nullen in Puffer schreiben
+      ios.ram_wrbyte(1,0,lineAddr)
+      quit
+    i++
+
+PRI printBufWin(lineAddr, win) | i
+
+  repeat i from 0 to buflinelen
+    if (temp_str[i] := ios.ram_rdbyte(1,lineAddr++)) == 0
+      if i > 1
+        if (temp_str[i-1] == 0) and (temp_str[i-2] == 0)
+          quit
+
+  printStrWin(@temp_str, win)
 
 PRI strToIpPort(ipstr, ip, port) | octet
   ' extracts the IP and PORT from a string
@@ -649,7 +824,7 @@ PRI sendStr (strSend) : error
 PUB findCharacterBack(charactersToSearch, characterToFind) | i
 
 '' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-'' │ Searches a string of characters for the last occurence of the specified character.                                      │
+'' │ Searches a string of characters for the last occurence of the specified character.                                       │
 '' │                                                                                                                          │
 '' │ Returns the address of that character if found and zero if not found.                                                    │
 '' │                                                                                                                          │
