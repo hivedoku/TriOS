@@ -210,7 +210,7 @@ PRI f_scrollup | lineAddr, lineNum
     ios.winset(focus)
     ios.scrollup
 
-    lineNum := buflinenr[focus] - ++scrolllinenr[focus]                             'Nummer hereinngescrollte neue Zeile
+    lineNum := buflinenr[focus] - --scrolllinenr[focus]                             'Nummer hereinngescrollte neue Zeile
     lineAddr := bufstart[focus] + (lineNum * buflinelen)                            'Adresse im eRAM (Usermode)
 
     printBufWin(lineAddr, focus)
@@ -359,6 +359,8 @@ PRI irc_join
     ios.print(string(10,"Fehler beim Senden des Nicknamens"))
     return(-1)
 
+  waitcnt(cnt + clkfreq)        '1sek warten
+
   ifnot strsize(@channel) == 0
     ios.winset(2)
     ios.print(string(" und verbinde mit Channel"))
@@ -376,7 +378,20 @@ PRI irc_getLine | i, nickstr, chanstr, msgstr
         msgstr++
         nickstr := @receive_str[1]
           if str.replaceCharacter(nickstr, "!", 0)
-            handleChatStr(chanstr, nickstr, msgstr, FALSE)
+            ' check for CTCP
+            i := strsize(msgstr)
+            if byte[msgstr] == 1 AND byte[msgstr][i - 1] == 1
+              ' it's a CTCP msg
+              byte[msgstr][i - 1] := 0                                            ' move string end up one spot
+              msgstr++                                                            ' seek past the CTCP byte
+              handleCTCPStr(nickstr, msgstr)
+              if strcomp(msgstr, string("VERSION"))
+                ' version string, reply with our cool version info
+                sendStr(string("NOTICE "))
+                sendStr(nickstr)
+                sendStr(string(" :VERSION HiveIRC 1.0.0 [P8X32A/80MHz] <http://hive-project.de/>",13,10))
+            else
+              handleChatStr(chanstr, nickstr, msgstr, FALSE)
     elseif str.findCharacters(@receive_str, string("PING :")) == @receive_str 'PING
       ios.winset(2)
       ios.print(string(10,"PING erhalten, sende PONG"))
@@ -608,7 +623,7 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, channicklen, msglineend,   
   repeat i from 0 to strsize(nickstr)        'Länge Nickname inkl. Abschluß-Null
     print_str[print_str_ptr++] := byte[nickstr][i]
 
- '3. Teilstring: 1. Teil  der Mitteilung
+ '4. Teilstring: 1. Teil  der Mitteilung
   if me
     print_str[print_str_ptr++] := COL_MARK    'Farbbyte
   else
@@ -659,6 +674,40 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, channicklen, msglineend,   
       else
         print_str[print_str_ptr++] := ch           'am Zeilenende entferntes Zeichen hier einfügen
         msgstr += msglineend + 1
+
+PRI handleCTCPStr(nickstr, msgstr) | i, msglineend
+
+  ios.winset(1)
+  print_str_ptr := 0         ' String neu beginnen
+
+  '1. Teilstring: Zeit
+  print_str[print_str_ptr++] := COL_MENU     'Farbbyte
+  printTime
+  print_str[print_str_ptr++] := 0
+
+ '3. Teilstring: Nickname
+  print_str[print_str_ptr++] := COL_FOCUS   'Farbbyte
+  print_str[print_str_ptr++] := ">"
+  repeat i from 0 to strsize(nickstr)        'Länge Nickname inkl. Abschluß-Null
+    print_str[print_str_ptr++] := byte[nickstr][i]
+
+ '3. Teilstring: CTCP Mitteilung
+  print_str[print_str_ptr++] := COL_DEFAULT 'Farbbyte
+  print_str[print_str_ptr++] := ":"
+  print_str[print_str_ptr++] := " "
+  msglineend := cols - strsize(nickstr) + 8
+  if strsize(msgstr) =< msglineend
+    msglineend := strsize(msgstr)          'msgline kürzer wie restliche Zeile
+  else
+    byte[msgstr][msglineend] := 0          'länger, abschneiden
+  repeat i from 0 to msglineend
+    print_str[print_str_ptr++] := byte[msgstr][i]
+  print_str[print_str_ptr++] := 0         'komplette Chat-Zeile fertig
+  print_str[print_str_ptr] := 0
+  print_str_ptr := 0
+  ios.printnl
+  printStrWin(@print_str, 1)
+  printStrBuf(1)
 
 PRI printStrWin(printStr, win) | i
 '' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
