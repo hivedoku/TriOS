@@ -60,9 +60,9 @@ Komponenten     : FATEngine      01/18/2009 Kwabena W. Agyeman MIT Lizenz
 
 COG's           : MANAGMENT     1 COG
                   FAT/RTC       1 COG
-                  NET           1 COG
+                  NET           2 COG
                   -------------------
-                                3 COGs
+                                4 COGs
 
 Logbuch         :
 
