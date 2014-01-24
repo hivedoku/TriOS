@@ -1,0 +1,11 @@
+                                 IRC
+                       IRC-Client für den Hive
+
+              Author: Jörg Deckert (joergd@bitquell.de)
+-------------------------------------------------------------------------------
+
+Einleitung
+----------
+
+IRC ist ein IRC-Client für den Hive. Er sollte auf jedem Hive mit bestücktem
+Netzwerk-Interface und RTC funktionieren.

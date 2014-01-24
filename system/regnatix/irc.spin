@@ -54,7 +54,7 @@ COL_FRAME       = 0    'Fensterrahmen (nicht ausgewählt)
 COL_FOCUS       = 3    'Fensterrahmen (ausgewählt/Fokus)
 COL_HEAD        = 8    'Titelzeile
 COL_TIME        = 8    'aktuelle Zeit in Message-Zeile
-COL_STTIME      = 8   'aktuelle Zeit im Status-Fenster
+COL_STTIME      = 8    'aktuelle Zeit im Status-Fenster
 COL_CHAN        = 5    'Channel in Message-Zeile
 COL_NICK        = 4    'Nickname in Message-Zeile
 COL_MYNICK      = 2    'Nickname in selbst geschriebener Message-Zeile
@@ -121,7 +121,7 @@ PUB main | key
                           f_input(key)
 
     ifnot handleidx == $FF
-      irc_getLine
+      ircGetLine
 
 PRI init
 
@@ -139,74 +139,13 @@ PRI init
 
   ios.start                                             'ios initialisieren
   ifnot (ios.admgetspec & LANMASK)
-    ios.print(string(10,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",10,"Bitte admnet laden.",10))
+    ios.print(string(13,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",13,"Bitte admnet laden.",13))
     ios.stop
-  ios.print(string(10,"Initialisiere, bitte warten...",10))
+  ios.print(string(13,"Initialisiere, bitte warten...",13))
   setscreen
   conf_load
   if ip_addr == 0
     f_setconf
-
-PRI conf_load | i
-
-  ios.sddmset(ios#DM_USER)                                      'u-marker setzen
-  ios.sddmact(ios#DM_SYSTEM)                                    's-marker aktivieren
-
-  ifnot ios.sdopen("R",@strConfFile)
-    ip_addr := ios.sdgetc << 24
-    ip_addr += ios.sdgetc << 16
-    ip_addr += ios.sdgetc << 8
-    ip_addr += ios.sdgetc
-    ip_port := ios.sdgetc << 8
-    ip_port += ios.sdgetc
-
-    repeat i from 0 to LEN_PASS
-      password[i] := ios.sdgetc
-    repeat i from 0 to LEN_NICK
-      nickname[i] := ios.sdgetc
-    repeat i from 0 to LEN_USER
-      username[i] := ios.sdgetc
-    repeat i from 0 to LEN_CHAN
-      channel[i] := ios.sdgetc
-
-    ios.sdclose
-
-  ios.sddmact(ios#DM_USER)                                      'u-marker aktivieren
-
-  hiveid := ios.getNVSRAM(NVRAM_HIVE)
-  hiveid += ios.getNVSRAM(NVRAM_HIVE+1) << 8
-  hiveid += ios.getNVSRAM(NVRAM_HIVE+2) << 16
-  hiveid += ios.getNVSRAM(NVRAM_HIVE+3) << 24
-
-
-PRI conf_save | i
-
-  ios.sddmset(ios#DM_USER)                                      'u-marker setzen
-  ios.sddmact(ios#DM_SYSTEM)                                    's-marker aktivieren
-
-  ios.sdnewfile(@strConfFile)
-  ifnot ios.sdopen("W",@strConfFile)
-    ios.sdputc(ip_addr >> 24)
-    ios.sdputc(ip_addr >> 16)
-    ios.sdputc(ip_addr >>  8)
-    ios.sdputc(ip_addr      )
-    ios.sdputc(ip_port >>  8)
-    ios.sdputc(ip_port      )
-
-    repeat i from 0 to LEN_PASS
-      ios.sdputc(password[i])
-    repeat i from 0 to LEN_NICK
-      ios.sdputc(nickname[i])
-    repeat i from 0 to LEN_USER
-      ios.sdputc(username[i])
-    repeat i from 0 to LEN_CHAN
-      ios.sdputc(channel[i])
-
-    ios.sdclose
-
-  ios.sddmact(ios#DM_USER)                                      'u-marker aktivieren
-
-  handleStatusStr(string("Konfiguration gespeichert."), 2, TRUE)
 
 PRI f_focus
 
@@ -244,7 +183,7 @@ PRI f_scrollup | lineAddr, lineNum, lineMax
       lineNum += lineMax
     lineAddr := bufstart[focus] + (lineNum * buflinelen)                            'Adresse im eRAM (Usermode)
 
-    printBufWin(lineAddr, focus)
+    printBufWin(lineAddr)
 
 PRI f_scrolldown | lineAddr, lineNum, lineMax
 
@@ -263,85 +202,30 @@ PRI f_scrolldown | lineAddr, lineNum, lineMax
       lineNum += lineMax
     lineAddr := bufstart[focus] + (lineNum * buflinelen)                            'Adresse im eRAM (Usermode)
 
-    printBufWin(lineAddr, focus)
+    printBufWin(lineAddr)
 
 PRI f_setconf | i,n
 
-  if ip_addr == 0
-    temp_str[0] := 0
-  else
-    IpPortToStr(ip_addr, ip_port)
-  input(string("IRC-Server angeben (IP:Port):"),@temp_str ,21)
-  ifnot strToIpPort(@input_str, @ip_addr, @ip_port)
-    handleStatusStr(string("Fehlerhafte Eingabe von IP-Adresse und Port des IRC-Servers."), 2, TRUE)
-
-  input(string("Paßwort eingeben:"),@password,LEN_PASS)
-  n := 1
-  repeat i from 0 to LEN_PASS
-    if n == 0
-      password[i] := 0
-    else
-      n := input_str[i]
-      password[i] := n
-
-  input(string("Nickname eingeben:"),@nickname,LEN_NICK)
-  n := 1
-  repeat i from 0 to LEN_NICK
-    if n == 0
-      nickname[i] := 0
-    else
-      n := input_str[i]
-      nickname[i] := n
-
-  input(string("Username eingeben:"),@username,LEN_USER)
-  n := 1
-  repeat i from 0 to LEN_USER
-    if n == 0
-      username[i] := 0
-    else
-      n := input_str[i]
-      username[i] := n
-
-  input(string("Channel eingeben:"),@channel,LEN_CHAN)
-  n := 1
-  repeat i from 0 to LEN_CHAN
-    if n == 0
-      channel[i] := 0
-    else
-      n := input_str[i]
-      channel[i] := n
+  ifnot confServer
+    return(TRUE)
+  confPass
+  confNick
+  confUser
+  confChannel
 
   win_contentRefresh
+  confSave
 
-  conf_save
+PRI f_connect
 
-PRI f_connect | t
-
-  handleStatusStr(string("Starte LAN..."), 2, TRUE)
-  ios.lanstart
-  handleStatusStr(string("Verbinde mit IRC-Server..."), 2, TRUE)
-  if (handleidx := ios.lan_connect(ip_addr, ip_port)) == $FF
-    ios.print(string(10,"Kein Socket frei!"))
-    handleStatusStr(string("Kein Socket frei!"), 2, TRUE)
-    return(-1)
-  ifnot (ios.lan_waitconntimeout(handleidx, 2000))
-    handleStatusStr(string("Verbindung mit IRC-Server konnte nicht aufgebaut werden."), 2, TRUE)
-    f_close
-    return(-1)
-  handleStatusStr(string("Verbunden, warte auf Bereitschaft..."), 2, TRUE)
-
-  t := cnt
-  repeat until (cnt - t) / clkfreq > 1    '1s lang Meldungen des Servers entgegennehmen
-    irc_getline
-
-  irc_pass
-  irc_join
+  ircConnect
+  ircPass
+  ircReg
+  ircJoin
 
 PRI f_close
 
-  ifnot handleidx == $FF
-    ios.lan_close(handleidx)
-    handleidx := $FF
+  ircClose
 
 PRI f_quit
 
@@ -354,7 +238,7 @@ PRI f_input(key)
 
   case key
     $0d:                if strsize(@send_str) > 0                          'Zeilenende, absenden
-                          irc_putLine
+                          ircPutLine
                           ios.winset(3)
                           ios.printnl
                           sendpos := 0
@@ -371,14 +255,154 @@ PRI f_input(key)
                           sendpos++
                           send_str[sendpos] := 0
 
-PRI irc_pass
+PRI confServer
+
+  if ip_addr == 0
+    temp_str[0] := 0
+  else
+    IpPortToStr(ip_addr, ip_port)
+  input(string("IRC-Server angeben (IP:Port):"),@temp_str ,21)
+  ifnot strToIpPort(@input_str, @ip_addr, @ip_port)
+    handleStatusStr(string("Fehlerhafte Eingabe von IP-Adresse und Port des IRC-Servers."), 2, TRUE)
+    return (FALSE)
+  return(TRUE)
+
+PRI confPass | i,n
+
+  input(string("Paßwort eingeben:"),@password,LEN_PASS)
+  n := 1
+  repeat i from 0 to LEN_PASS
+    if n == 0
+      password[i] := 0
+    else
+      n := input_str[i]
+      password[i] := n
+
+PRI confNick | i,n
+
+  input(string("Nickname eingeben:"),@nickname,LEN_NICK)
+  n := 1
+  repeat i from 0 to LEN_NICK
+    if n == 0
+      nickname[i] := 0
+    else
+      n := input_str[i]
+      nickname[i] := n
+
+PRI confUser | i,n
+
+  input(string("Username eingeben:"),@username,LEN_USER)
+  n := 1
+  repeat i from 0 to LEN_USER
+    if n == 0
+      username[i] := 0
+    else
+      n := input_str[i]
+      username[i] := n
+
+PRI confChannel | i,n
+
+  input(string("Channel eingeben:"),@channel,LEN_CHAN)
+  n := 1
+  repeat i from 0 to LEN_CHAN
+    if n == 0
+      channel[i] := 0
+    else
+      n := input_str[i]
+      channel[i] := n
+
+PRI confSave | i
+
+  ios.sddmset(ios#DM_USER)                                      'u-marker setzen
+  ios.sddmact(ios#DM_SYSTEM)                                    's-marker aktivieren
+
+  ios.sdnewfile(@strConfFile)
+  ifnot ios.sdopen("W",@strConfFile)
+    ios.sdputc(ip_addr >> 24)
+    ios.sdputc(ip_addr >> 16)
+    ios.sdputc(ip_addr >>  8)
+    ios.sdputc(ip_addr      )
+    ios.sdputc(ip_port >>  8)
+    ios.sdputc(ip_port      )
+
+    repeat i from 0 to LEN_PASS
+      ios.sdputc(password[i])
+    repeat i from 0 to LEN_NICK
+      ios.sdputc(nickname[i])
+    repeat i from 0 to LEN_USER
+      ios.sdputc(username[i])
+    repeat i from 0 to LEN_CHAN
+      ios.sdputc(channel[i])
+
+    ios.sdclose
+
+  ios.sddmact(ios#DM_USER)                                      'u-marker aktivieren
+
+  handleStatusStr(string("Konfiguration gespeichert."), 2, TRUE)
+
+PRI conf_load | i
+
+  ios.sddmset(ios#DM_USER)                                      'u-marker setzen
+  ios.sddmact(ios#DM_SYSTEM)                                    's-marker aktivieren
+
+  ifnot ios.sdopen("R",@strConfFile)
+    ip_addr := ios.sdgetc << 24
+    ip_addr += ios.sdgetc << 16
+    ip_addr += ios.sdgetc << 8
+    ip_addr += ios.sdgetc
+    ip_port := ios.sdgetc << 8
+    ip_port += ios.sdgetc
+
+    repeat i from 0 to LEN_PASS
+      password[i] := ios.sdgetc
+    repeat i from 0 to LEN_NICK
+      nickname[i] := ios.sdgetc
+    repeat i from 0 to LEN_USER
+      username[i] := ios.sdgetc
+    repeat i from 0 to LEN_CHAN
+      channel[i] := ios.sdgetc
+
+    ios.sdclose
+
+  ios.sddmact(ios#DM_USER)                                      'u-marker aktivieren
+
+  hiveid := ios.getNVSRAM(NVRAM_HIVE)
+  hiveid += ios.getNVSRAM(NVRAM_HIVE+1) << 8
+  hiveid += ios.getNVSRAM(NVRAM_HIVE+2) << 16
+  hiveid += ios.getNVSRAM(NVRAM_HIVE+3) << 24
+
+PRI ircConnect | t
+
+  handleStatusStr(string("Verbinde mit IRC-Server..."), 2, TRUE)
+  ios.lanstart
+  if (handleidx := ios.lan_connect(ip_addr, ip_port)) == $FF
+    handleStatusStr(string("Kein Socket frei!"), 2, TRUE)
+    return(-1)
+  ifnot (ios.lan_waitconntimeout(handleidx, 2000))
+    handleStatusStr(string("Verbindung mit IRC-Server konnte nicht aufgebaut werden."), 2, TRUE)
+    f_close
+    return(-1)
+  handleStatusStr(string("Verbunden, warte auf Bereitschaft..."), 2, TRUE)
+
+  t := cnt
+  repeat until (cnt - t) / clkfreq > 1    '1s lang Meldungen des Servers entgegennehmen
+    ircGetline
+
+PRI ircClose
+
+  ifnot handleidx == $FF
+    ios.lan_close(handleidx)
+    handleidx := $FF
+    handleStatusStr(string("Verbindung mit IRC-Server getrennt..."), 2, TRUE)
+
+PRI ircPass
 
   handleStatusStr(string("Sende Paßwort..."), 2, TRUE)
   if sendStr(string("PASS ")) or sendStr(@password) or sendStr(string(13,10))
     handleStatusStr(string("Fehler beim Senden des Paßwortes"), 2, TRUE)
     return(-1)
 
-PRI irc_join
+PRI ircReg
 
   if strsize(@channel) == 0
     handleStatusStr(string("Sende Nickname und Benutzerinformationen..."), 2, TRUE)
@@ -395,12 +419,14 @@ PRI irc_join
 
   waitcnt(cnt + clkfreq)        '1sek warten
 
+PRI ircJoin
+
   ifnot strsize(@channel) == 0
     if sendStr(string("JOIN ")) or sendStr(@channel) or sendStr(string(13,10))
       handleStatusStr(string("Fehler beim Verbinden mit Channel"), 2, TRUE)
       return(-1)
 
-PRI irc_getLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
+PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
 
   if readLine(2000) 'vollständige Zeile empfangen
 
@@ -477,11 +503,45 @@ PRI irc_getLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
     else                                                                      'unbekanntes Kommando
       handleStatusStr(commandstr, 2, FALSE)
 
-PRI irc_putLine | i
+PRI ircPutLine | i
 
-  if str.startsWithCharacters(@send_str, string("/set"))     'Einstellungen
+  if str.startsWithCharacters(@send_str, string("/set"))      'alle Einstellungen ändern und speichern
     f_setconf
-  elseif str.startsWithCharacters(@send_str, string("/msg")) 'Message an Nickname
+  elseif str.startsWithCharacters(@send_str, string("/save")) 'Konfiguration speichern
+    confSave
+  elseif str.startsWithCharacters(@send_str, string("/srv"))  'mit Server verbinden
+    if confServer                                             'wenn Eingabe IP und Port korrekt
+      win_contentRefresh
+      ircClose                                                'bei bestehender Verbindung diese beenden
+      ircConnect
+      ircPass
+      ircReg
+    else
+      win_contentRefresh
+  elseif str.startsWithCharacters(@send_str, string("/quit")) 'Verbindung mit Server trennen
+    ircClose
+  elseif str.startsWithCharacters(@send_str, string("/pass")) 'Paßwort ändern
+    confPass
+    win_contentRefresh
+  elseif str.startsWithCharacters(@send_str, string("/nick")) 'Nickname ändern
+    confNick
+    win_contentRefresh
+  elseif str.startsWithCharacters(@send_str, string("/user")) 'User ändern
+    confUser
+    win_contentRefresh
+  elseif str.startsWithCharacters(@send_str, string("/join")) 'mit Channel verbinden
+    confChannel
+    win_contentRefresh
+    ircJoin
+  elseif str.startsWithCharacters(@send_str, string("/part")) 'Channel verlassen
+    sendStr(string("PART "))
+    sendStr(@channel)
+    if send_str[5] == " "
+      sendStr(@send_str[5])
+    sendStr(string(13,10))
+    channel[0] := 0
+    handleChatStr(@channel, @nickname, @send_str, 1)
+  elseif str.startsWithCharacters(@send_str, string("/msg"))  'Message an Nickname
     sendStr(string("PRIVMSG "))
     if (i := str.replaceCharacter(@send_str[5], " ", 0))
       sendStr(@send_str[5])
@@ -489,11 +549,11 @@ PRI irc_putLine | i
       sendStr(i)
       sendStr(string(13,10))
       handleChatStr(@send_str[5], @nickname, i, 1)
-  elseif send_str[0] == "/"                                  'anderes IRC-Kommando an Server
+  elseif send_str[0] == "/"                                   'anderes IRC-Kommando an Server
     sendStr(@send_str[1])
     sendStr(string(13,10))
-    handleChatStr(@channel, @nickname, @send_str[1], 1)
-  else                                                       'Message an Channel
+    handleChatStr(@channel, @nickname, @send_str, 1)
+  else                                                        'Message an Channel
     sendStr(string("PRIVMSG "))
     sendStr(@channel)
     sendStr(string(" :"))
@@ -577,15 +637,13 @@ PRI win_contentRefresh | win, lines, lineNum
         2: lineNum := MAX_LINES_WIN2 + buflinenr[win] - lines
     ios.winset(win)
     ios.printcls
-    printBufWin(bufstart[win] + (lineNum * buflinelen), win)
+    printBufWin(bufstart[win] + (lineNum * buflinelen))
     repeat lines - 1
       lineNum++
       if lineNum == MAX_LINES_WIN1
         lineNum := 0
-'      ios.printnl
-      ios.printchar(10)
-      printBufWin(bufstart[win] + (lineNum * buflinelen), win)
-    win++
+      ios.printnl
+      printBufWin(bufstart[win] + (lineNum * buflinelen))
 
 PRI setscreen | buflen[4], i
 
@@ -716,10 +774,9 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, channicklen, msglineend, ch
       print_str[print_str_ptr++] := 0         'komplette Chat-Zeile fertig
       print_str[print_str_ptr] := 0
       print_str_ptr := 0
-      if scrolllinenr[1] == 0
-'        ios.printnl
-        ios.printchar(10)
-        printStrWin(@print_str, 1)
+      if scrolllinenr[1] == 0                 'Chat-Fenster nicht gescrollt
+        ios.printnl
+        printStrWin(@print_str)
       printStrBuf(1)
       quit
     else                                      'msgline muß umgebrochen werden
@@ -734,9 +791,8 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, channicklen, msglineend, ch
         print_str[print_str_ptr] := 0
         print_str_ptr := 0
         if scrolllinenr[1] == 0
-'          ios.printnl
-          ios.printchar(10)
-          printStrWin(@print_str, 1)
+          ios.printnl
+          printStrWin(@print_str)
         printStrBuf(1)
       else                                         'kein einziges Leerzeichen
         repeat i from 0 to strsize(msgstr)         'in print_str schreiben
@@ -745,9 +801,8 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, channicklen, msglineend, ch
         print_str[print_str_ptr] := 0
         print_str_ptr := 0
         if scrolllinenr[1] == 0
-'          ios.printnl
-          ios.printchar(10)
-          printStrWin(@print_str, 1)
+          ios.printnl
+          printStrWin(@print_str)
         printStrBuf(1)
       if me == 1
         print_str[print_str_ptr++] := COL_MYMSG    'nach Zeilenumbruch beginnt neue Zeile wieder mit Farbbyte
@@ -792,9 +847,8 @@ PRI handleCTCPStr(nickstr, msgstr) | i, msglineend
   print_str[print_str_ptr] := 0
   print_str_ptr := 0
   if scrolllinenr[1] == 0
-'    ios.printnl
-    ios.printchar(10)
-    printStrWin(@print_str, 1)
+    ios.printnl
+    printStrWin(@print_str)
   printStrBuf(1)
 
 PRI handleStatusStr(statusstr, win, showtime) | i, statlineend
@@ -829,17 +883,14 @@ PRI handleStatusStr(statusstr, win, showtime) | i, statlineend
   print_str[print_str_ptr] := 0
   print_str_ptr := 0
   if scrolllinenr[win] == 0
-'    ios.printnl
-    ios.printchar(10)
-    printStrWin(@print_str, win)
+    ios.printnl
+    printStrWin(@print_str)
   printStrBuf(win)
 
-PRI printStrWin(printStr, win) | i
+PRI printStrWin(printStr) | i
 '' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-'' │ Chat-Zeile anzeigen                                                                                   │
+'' │ Chat-Zeile in aktuellem Fenster zeigen                                                                                   │
 '' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-
-  ios.winset(win)
 
   i := 0
   repeat
@@ -849,6 +900,8 @@ PRI printStrWin(printStr, win) | i
     ios.print(printStr + i)                                'restlichen String anzeigen
     i += strsize(printStr + i) + 1                         'i zeigt auf nächsten Teilstring
 
+  ios.curpos1                                              'ohne diesen befehl wird, wenn letztes Zeichen ganz am Ende steht
+                                                           'bei einem ios.printnl eine zusätzliche Leerzeile angezeigt
 
 PRI printStrBuf(win) | lineAddr, lineMax, i
 '' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -873,7 +926,7 @@ PRI printStrBuf(win) | lineAddr, lineMax, i
       quit
     i++
 
-PRI printBufWin(lineAddr, win) | i
+PRI printBufWin(lineAddr) | i
 
   repeat i from 0 to buflinelen
     if (temp_str[i] := ios.ram_rdbyte(1,lineAddr++)) == 0
@@ -881,7 +934,7 @@ PRI printBufWin(lineAddr, win) | i
         if (temp_str[i-1] == 0) and (temp_str[i-2] == 0)
           quit
 
-  printStrWin(@temp_str, win)
+  printStrWin(@temp_str)
 
 PRI strToIpPort(ipstr, ip, port) | octet
   ' extracts the IP and PORT from a string
