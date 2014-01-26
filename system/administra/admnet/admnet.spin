@@ -1197,6 +1197,7 @@ PRI lan_connect | ipaddr, remoteport, handle, handleidx, i
     i++
 
   ifnot (handle := sock.connect(ipaddr, remoteport, @bufrx[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
+    sock.resetBuffers(handle)
     handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
     sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
     bufidx[i] :=handleidx

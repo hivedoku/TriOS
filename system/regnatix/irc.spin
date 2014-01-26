@@ -35,6 +35,7 @@ OBJ
         str: "glob-string"
         num: "glob-numbers"        'Number Engine
         gc : "glob-con"
+        led: "led-engine"
 
 CON
 
@@ -66,6 +67,7 @@ LEN_NICK        = 32
 LEN_USER        = 32
 LEN_CHAN        = 32
 LEN_IRCLINE     = 512
+LEN_IRCSRV      = 64
 
 MAX_LINES_WIN1  = 1000  ' maximale Zeilenanzahl im Puffer für Fenster 1 (Chat)
 MAX_LINES_WIN2  = 1000  ' maximale Zeilenanzahl im Puffer für Fenster 2 (Status)
@@ -85,7 +87,9 @@ VAR
   long  t1char                                'Empfangs-Zeitpunkt des 1. Zeichen einer Zeile
   long  ip_addr
   long  hiveid
+  long  ledcog
   long  bufstart[4]
+  long  ledstack[30]                          'Stack für LED-Cog
   word  buflinenr[4]
   word  scrolllinenr[4]
   word  ip_port
@@ -93,14 +97,16 @@ VAR
   word  sendpos
   byte  handleidx                             'Handle-Nummer IRC Verbindung
   byte  rows,cols,vidmod
+  byte  joined
   byte  x0[4], y0[4], xn[4], yn[4], hy[4], buflinelen, focus
-  byte  password[LEN_PASS+1],nickname[LEN_NICK+1],username[LEN_USER+1],channel[LEN_CHAN+1]
+  byte  password[LEN_PASS+1],nickname[LEN_NICK+1],username[LEN_USER+1],channel[LEN_CHAN+1],ircsrv[LEN_IRCSRV+1]
   byte  input_str[64]
   byte  temp_str[256]
   byte  print_str[256]
   byte  print_str_ptr
   byte  send_str[LEN_IRCLINE]
   byte  receive_str[LEN_IRCLINE]
+  byte  brightness
 
 PUB main | key
 
@@ -108,6 +114,7 @@ PUB main | key
 
   repeat
     if ios.keystat > 0
+      ledStop
       key := ios.key
       case key
         gc#KEY_TAB:     f_focus
@@ -129,13 +136,16 @@ PRI init
   ip_port         := 0
   readpos         := 0
   sendpos         := 0
+  ledcog          := 0
   handleidx       := $FF
   password[0]     := 0
   nickname[0]     := 0
   username[0]     := 0
   channel[0]      := 0
   send_str[0]     := 0
+  ircsrv[0]       := 0
   focus           := 3
+  joined          := FALSE
 
   ios.start                                             'ios initialisieren
   ifnot (ios.admgetspec & LANMASK)
@@ -373,6 +383,8 @@ PRI conf_load | i
 
 PRI ircConnect | t
 
+  joined := FALSE
+
   handleStatusStr(string("Verbinde mit IRC-Server..."), 2, TRUE)
   ios.lanstart
   if (handleidx := ios.lan_connect(ip_addr, ip_port)) == $FF
@@ -395,6 +407,8 @@ PRI ircClose
     handleidx := $FF
     handleStatusStr(string("Verbindung mit IRC-Server getrennt..."), 2, TRUE)
 
+    title_draw
+
 PRI ircPass
 
   handleStatusStr(string("Sende Paßwort..."), 2, TRUE)
@@ -402,16 +416,17 @@ PRI ircPass
     handleStatusStr(string("Fehler beim Senden des Paßwortes"), 2, TRUE)
     return(-1)
 
-PRI ircReg
-
-  if strsize(@channel) == 0
-    handleStatusStr(string("Sende Nickname und Benutzerinformationen..."), 2, TRUE)
-  else
-    handleStatusStr(string("Sende Nickname und Benutzer, verbinde mit Channel..."), 2, TRUE)
+PRI ircNick
 
   if sendStr(string("NICK ")) or sendStr(@nickname) or sendStr(string(13,10))
     handleStatusStr(string("Fehler beim Senden des Nicknamens"), 2, TRUE)
     return(-1)
+
+PRI ircReg
+
+  handleStatusStr(string("Sende Nickname und Benutzerinformationen..."), 2, TRUE)
+
+  ircNick
 
   if sendStr(string("USER ")) or sendStr(@username) or sendStr(string(" 8 * :Hive #")) or sendStr(str.trimCharacters(num.ToStr(hiveid, num#DEC))) or sendStr(string(13,10))
     handleStatusStr(string("Fehler beim Senden der Benutzerinformationen"), 2, TRUE)
@@ -426,6 +441,22 @@ PRI ircJoin
       handleStatusStr(string("Fehler beim Verbinden mit Channel"), 2, TRUE)
       return(-1)
 
+    joined := TRUE
+    title_draw
+
+PRI ircPart
+
+    sendStr(string("PART "))
+    sendStr(@channel)
+    if send_str[5] == " "
+      sendStr(@send_str[5])
+    sendStr(string(13,10))
+    channel[0] := 0
+    handleChatStr(@channel, @nickname, @send_str, 1)
+
+    joined := FALSE
+    title_draw
+
 PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
 
   if readLine(2000) 'vollständige Zeile empfangen
@@ -438,7 +469,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
       prefixstr := 0
       commandstr := @receive_str                                              'es geht gleich mit dem Kommando los
 
-    if str.findCharacters(commandstr, string("PRIVMSG ")) == commandstr       'Chat Message
+    if str.startsWithCharacters(commandstr, string("PRIVMSG "))               'Chat Message
       chanstr := commandstr + 8
       if (msgstr := str.replaceCharacter(chanstr, " ", 0))
         msgstr++
@@ -456,16 +487,17 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
                 sendStr(nickstr)
                 sendStr(string(" :VERSION HiveIRC 1.0.0 [P8X32A/80MHz] <http://hive-project.de/>",13,10))
             else
+              ledStart
               if byte[chanstr] == "#"                                         'Message an Channel
                 handleChatStr(chanstr, nickstr, msgstr, 0)
               else                                                            'Message an mich
                 handleChatStr(string("<priv>"), nickstr, msgstr, 2)
-    elseif str.findCharacters(commandstr, string("PING :")) == commandstr     'PING
+    elseif str.startsWithCharacters(commandstr, string("PING :"))             'PING
       handleStatusStr(string("PING erhalten, sende PONG"), 2, TRUE)
       byte[commandstr][1] := "O"
       sendStr(commandstr)
       sendStr(string(13,10))
-    elseif str.findCharacters(commandstr, string("JOIN :")) == commandstr     'JOIN
+    elseif str.startsWithCharacters(commandstr, string("JOIN "))              'JOIN
       if (str.replaceCharacter(prefixstr, "!", 0))
         repeat x from 0 to strsize(prefixstr) - 1
           temp_str[x] := byte[prefixstr][x]
@@ -474,11 +506,36 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
           temp_str[x++] := byte[msgstr][i]
         temp_str[x] := 0
         handleStatusStr(@temp_str, 2, TRUE)
-    elseif str.findCharacters(commandstr, string("QUIT :")) == commandstr     'QUIT
+    elseif str.startsWithCharacters(commandstr, string("PART "))              'PART
       if (str.replaceCharacter(prefixstr, "!", 0))
         repeat x from 0 to strsize(prefixstr) - 1
           temp_str[x] := byte[prefixstr][x]
         msgstr := string(" hat den Kanal verlassen")
+        repeat i from 0 to strsize(msgstr) - 1
+          temp_str[x++] := byte[msgstr][i]
+        temp_str[x] := 0
+        handleStatusStr(@temp_str, 2, TRUE)
+    elseif str.startsWithCharacters(commandstr, string("QUIT :"))             'QUIT
+      if (str.replaceCharacter(prefixstr, "!", 0))
+        repeat x from 0 to strsize(prefixstr) - 1
+          temp_str[x] := byte[prefixstr][x]
+        msgstr := string(" hat den Server verlassen")
+        repeat i from 0 to strsize(msgstr) - 1
+          temp_str[x++] := byte[msgstr][i]
+        temp_str[x] := 0
+        handleStatusStr(@temp_str, 2, TRUE)
+    elseif str.startsWithCharacters(commandstr, string("NOTICE "))            'Notiz
+    elseif str.startsWithCharacters(commandstr, string("MODE "))              'Mode
+    elseif str.startsWithCharacters(commandstr, string("NICK "))             'Nick
+      if (str.replaceCharacter(prefixstr, "!", 0))
+        repeat x from 0 to strsize(prefixstr) - 1
+          temp_str[x] := byte[prefixstr][x]
+        msgstr := string(" hat seinen Nicknamen geändert in ")
+        repeat i from 0 to strsize(msgstr) - 1
+          temp_str[x++] := byte[msgstr][i]
+        msgstr := commandstr + 5
+        if byte[msgstr] == ":"
+          msgstr++
         repeat i from 0 to strsize(msgstr) - 1
           temp_str[x++] := byte[msgstr][i]
         temp_str[x] := 0
@@ -488,7 +545,19 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
       nickstr := commandstr + 4
       msgstr := str.replaceCharacter(nickstr, " ", 0)
       case num.FromStr(commandstr, num#DEC)
-        372:   handleStatusStr(msgstr + 3, 1, FALSE)                          'MOTD
+        1:        if prefixstr
+                    msgstr := string("Verbunden mit ")
+                    repeat x from 0 to strsize(msgstr) - 1
+                      temp_str[x] := byte[msgstr][x]
+                    repeat i from 0 to LEN_IRCSRV
+                      ircsrv[i] := byte[prefixstr][i]
+                      temp_str[x++] := byte[prefixstr][i]
+                      if byte[prefixstr][i] == 0
+                        quit
+                    ircsrv[LEN_IRCSRV] := 0
+                    handleStatusStr(@temp_str, 2, TRUE)
+                    title_draw
+        372:      handleStatusStr(msgstr + 3, 1, FALSE)                       'MOTD
         375..376:
         other:    repeat x from 0 to strsize(commandstr) - 1                  'unbehandelter Return-Code
                     temp_str[x] := byte[commandstr][x]
@@ -502,6 +571,8 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
                   handleStatusStr(@temp_str, 2, TRUE)
     else                                                                      'unbekanntes Kommando
       handleStatusStr(commandstr, 2, FALSE)
+    ios.winset(3)
+    ios.curon
 
 PRI ircPutLine | i
 
@@ -510,37 +581,57 @@ PRI ircPutLine | i
   elseif str.startsWithCharacters(@send_str, string("/save")) 'Konfiguration speichern
     confSave
   elseif str.startsWithCharacters(@send_str, string("/srv"))  'mit Server verbinden
-    if confServer                                             'wenn Eingabe IP und Port korrekt
-      win_contentRefresh
-      ircClose                                                'bei bestehender Verbindung diese beenden
-      ircConnect
-      ircPass
-      ircReg
+    if send_str[4] == " " and send_str[5] <> " " and send_str[5] <> 0 'Nick als Parameter angegeben
+      ifnot strToIpPort(@send_str[5], @ip_addr, @ip_port)
+        handleStatusStr(string("Fehlerhafte Eingabe von IP-Adresse und Port des IRC-Servers."), 2, TRUE)
+        return (FALSE)
     else
-      win_contentRefresh
+      ifnot confServer                                      'Eingabefenster
+        win_contentRefresh
+        return(FALSE)
+      else
+        win_contentRefresh
+    ircClose                                                'bei bestehender Verbindung diese beenden
+    ircConnect
+    ircPass
+    ircReg
   elseif str.startsWithCharacters(@send_str, string("/quit")) 'Verbindung mit Server trennen
     ircClose
   elseif str.startsWithCharacters(@send_str, string("/pass")) 'Paßwort ändern
     confPass
     win_contentRefresh
+    handleStatusStr(string("Paßwort geändert, zum Anwenden neu verbinden"), 2, FALSE)
   elseif str.startsWithCharacters(@send_str, string("/nick")) 'Nickname ändern
-    confNick
-    win_contentRefresh
+    if send_str[5] == " " and send_str[6] <> " " and send_str[6] <> 0 'Nick als Parameter angegeben
+      repeat i from 0 to LEN_NICK
+        nickname[i] := send_str[6+i]
+        if send_str[6+i] == 0
+          quit
+      channel[LEN_NICK] := 0
+    else
+      confNick
+      win_contentRefresh
+    ircNick
   elseif str.startsWithCharacters(@send_str, string("/user")) 'User ändern
     confUser
     win_contentRefresh
+    handleStatusStr(string("User geändert, zum Anwenden neu verbinden"), 2, FALSE)
   elseif str.startsWithCharacters(@send_str, string("/join")) 'mit Channel verbinden
-    confChannel
-    win_contentRefresh
-    ircJoin
+    if joined
+      handleStatusStr(string("Kanal bereits betreten, vorher mit /part verlassen"), 2, FALSE)
+    else
+      if send_str[5] == " " and send_str[6] == "#"            'Channel als Parameter angegeben
+        repeat i from 0 to LEN_CHAN
+          channel[i] := send_str[6+i]
+          if send_str[6+i] == 0
+            quit
+        channel[LEN_IRCSRV] := 0
+      else
+        confChannel
+        win_contentRefresh
+      ircJoin
   elseif str.startsWithCharacters(@send_str, string("/part")) 'Channel verlassen
-    sendStr(string("PART "))
-    sendStr(@channel)
-    if send_str[5] == " "
-      sendStr(@send_str[5])
-    sendStr(string(13,10))
-    channel[0] := 0
-    handleChatStr(@channel, @nickname, @send_str, 1)
+    ircPart
   elseif str.startsWithCharacters(@send_str, string("/msg"))  'Message an Nickname
     sendStr(string("PRIVMSG "))
     if (i := str.replaceCharacter(@send_str[5], " ", 0))
@@ -561,17 +652,34 @@ PRI ircPutLine | i
     sendStr(string(13,10))
     handleChatStr(@channel, @nickname, @send_str, 1)
 
-PRI frame_draw
+PRI title_draw | spaces, i
 
   ios.winset(0)
   ios.curoff
-  ios.printcls
   ios.cursetx(W0X_MENU)
   ios.cursety(W0Y_MENU)
   ios.setcolor(COL_HEAD)
+  spaces := cols-W0X_MENU
   ios.print(string(" IRC Client"))
-  repeat cols-W0X_MENU-11
-    ios.printchar(" ")
+  spaces -= 11
+  ifnot handleidx == $FF           'wenn verbunden
+    ios.print(string(" ("))
+      spaces -= 2
+    if joined
+      ios.print(@channel)
+      ios.printchar("@")
+      spaces -= strsize(@channel)+1
+    i := 0
+    repeat spaces - 1
+      if ircsrv[i] == 0          'Ende Servername erreicht
+        ios.printchar(" ")
+      else
+        ios.printchar(ircsrv[i])
+        if ircsrv[++i] == 0      'Ende Servername folgt
+          ios.printchar(")")
+  else
+    repeat spaces
+      ios.printchar(" ")
   ios.printlogo(0,0)
 
 PRI win_draw | i
@@ -701,7 +809,9 @@ PRI setscreen | buflen[4], i
   repeat i from 0 to MAX_LINES_WIN3 - 1             'Fensterpuffer leeren
     printStrBuf(3)
 
-  frame_draw
+  ios.winset(0)
+  ios.printcls
+  title_draw
   win_draw
 
   'Eingabe-Fenster (Nr. 4)
@@ -722,7 +832,7 @@ PRI printTime | timeStr, i
     print_str[print_str_ptr++] := byte[timeStr][i]
   print_str[print_str_ptr++] := "]"
 
-PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, channicklen, msglineend, ch, space
+PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, timenicklen, msglineend, ch, space, lastline
 '' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 '' │ Chat-Zeile erstellen, anzeigen und in Puffer schreiben                                                                   │
 '' |                                                                                                                          |
@@ -734,81 +844,57 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, channicklen, msglineend, ch
 '' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
   ios.winset(1)
-  print_str_ptr := 0         ' String neu beginnen
+  lastline := FALSE          'letzte der erstellten Zeilen?
+  print_str_ptr := 0         'String neu beginnen
 
-  '1. Teilstring: Zeit
+'1. Teilstring: Zeit
   print_str[print_str_ptr++] := COL_TIME     'Farbbyte
   printTime
   print_str[print_str_ptr++] := 0
 
- '2. Teilstring: Channel
-  if me == 2
-    print_str[print_str_ptr++] := COL_MYNICK 'Farbbyte
-  else
-    print_str[print_str_ptr++] := COL_CHAN   'Farbbyte
-  repeat i from 0 to strsize(chanstr)        'Länge Channel inkl. Abschluß-Null
-    print_str[print_str_ptr++] := byte[chanstr][i]
-
- '3. Teilstring: Nickname
+'2. Teilstring: Nickname
   if me == 1
     print_str[print_str_ptr++] := COL_MYNICK  'Farbbyte
   else
     print_str[print_str_ptr++] := COL_NICK    'Farbbyte
   print_str[print_str_ptr++] := ">"
-  repeat i from 0 to strsize(nickstr)        'Länge Nickname inkl. Abschluß-Null
+  repeat i from 0 to strsize(nickstr) - 1     'Länge Nickname ohne Abschluß-Null
     print_str[print_str_ptr++] := byte[nickstr][i]
+  print_str[print_str_ptr++] := ":"
+  print_str[print_str_ptr++] := " "
+  print_str[print_str_ptr++] := 0
 
- '4. Teilstring: 1. Teil  der Mitteilung
+'3. Teilstring: 1. Teil  der Mitteilung
   if me == 1
     print_str[print_str_ptr++] := COL_MYMSG   'Farbbyte
   else
     print_str[print_str_ptr++] := COL_MSG     'Farbbyte
-  print_str[print_str_ptr++] := ":"
-  print_str[print_str_ptr++] := " "
-  channicklen := strsize(chanstr) + strsize(nickstr) + 10
-  msglineend := cols - channicklen -2
-  repeat
-    if strsize(msgstr) =< msglineend          'msgline paßt auf Zeile
-      repeat i from 0 to strsize(msgstr)      'Länge Mitteilung inkl. Abschluß-Null
-        print_str[print_str_ptr++] := byte[msgstr][i]
-      print_str[print_str_ptr++] := 0         'komplette Chat-Zeile fertig
-      print_str[print_str_ptr] := 0
-      print_str_ptr := 0
-      if scrolllinenr[1] == 0                 'Chat-Fenster nicht gescrollt
-        ios.printnl
-        printStrWin(@print_str)
-      printStrBuf(1)
-      quit
-    else                                      'msgline muß umgebrochen werden
+  timenicklen := strsize(nickstr) + 10
+  msglineend := cols - timenicklen -2
+  repeat until lastline
+    if strsize(msgstr) =< msglineend               'msgline paßt auf Zeile
+      lastline := TRUE
+    else                                           'msgline muß umgebrochen werden
       ch := byte[msgstr][msglineend]               'Zeichen am Zeilenende sichern
       byte[msgstr][msglineend] := 0                'Messagestring am Zeilenende abschließen
       if (space := findCharacterBack(msgstr, " ")) 'wenn letztes Leerzeichen in msgstr gefunden
         byte[msgstr][msglineend] := ch             'Zeichen am Zeilenende wieder einfügen
         byte[space] := 0                           'msgstr am letzten Leerzeichen abschließen
-        repeat i from 0 to strsize(msgstr)         'und in print_str schreiben
-          print_str[print_str_ptr++] := byte[msgstr][i]
-        print_str[print_str_ptr++] := 0            'komplette Chat-Zeile fertig, weitere folgt
-        print_str[print_str_ptr] := 0
-        print_str_ptr := 0
-        if scrolllinenr[1] == 0
-          ios.printnl
-          printStrWin(@print_str)
-        printStrBuf(1)
-      else                                         'kein einziges Leerzeichen
-        repeat i from 0 to strsize(msgstr)         'in print_str schreiben
-          print_str[print_str_ptr++] := byte[msgstr][i]
-        print_str[print_str_ptr++] := 0            'komplette Chat-Zeile fertig, weitere folgt
-        print_str[print_str_ptr] := 0
-        print_str_ptr := 0
-        if scrolllinenr[1] == 0
-          ios.printnl
-          printStrWin(@print_str)
-        printStrBuf(1)
+    repeat i from 0 to strsize(msgstr)             'Länge Mitteilung inkl. Abschluß-Null
+      print_str[print_str_ptr++] := byte[msgstr][i]
+    print_str[print_str_ptr++] := 0                'komplette Chat-Zeile fertig
+    print_str[print_str_ptr] := 0
+    print_str_ptr := 0
+    if scrolllinenr[1] == 0                        'Chatfenster nicht gescrollt
+      ios.printnl
+      printStrWin(@print_str)                      'im Chatfenster anzeigen
+    printStrBuf(1)                                 'in Fensterpuffer schreiben
+    ifnot lastline                                 'wenn noch eine zeile folgt, diese bereits beginnen
       if me == 1
         print_str[print_str_ptr++] := COL_MYMSG    'nach Zeilenumbruch beginnt neue Zeile wieder mit Farbbyte
       else
         print_str[print_str_ptr++] := COL_MSG
-      repeat channicklen                           '"Tab" bis Ende Anzeige Channel + Nickname
+      repeat timenicklen                           '"Tab" bis Ende Anzeige Channel + Nickname
         print_str[print_str_ptr++] := " "
       if space
         msgstr := space + 1
@@ -866,12 +952,12 @@ PRI handleStatusStr(statusstr, win, showtime) | i, statlineend
   if showtime
     print_str[print_str_ptr++] := COL_STTIME     'Farbbyte
     printTime
-    print_str[print_str_ptr++] := " "
     print_str[print_str_ptr++] := 0
 
    '2. Teilstring: Status
   print_str[print_str_ptr++] := COL_STDEFAULT    'Farbbyte
   if showtime
+    print_str[print_str_ptr++] := " "
     statlineend := cols - 10
   else
     statlineend := cols - 2
@@ -1010,18 +1096,19 @@ PUB input(strdesc, strdef, input_len) | i,n
   byte[@input_str][i] := 0
   ios.curon
   repeat                                                'entspricht ab hier ios.input
-    n := ios.keywait                                        'auf taste warten
-    if n == $0d
-       quit
-    if (n == ios#CHAR_BS)&(i>0)                             'backspace
-       ios.printbs
-       i--
-       byte[@input_str][i] := 0
-    elseif i < input_len                                      'normales zeichen
-       ios.printchar(n)
-       byte[@input_str][i] := n
-       i++
-       byte[@input_str][i] := 0
+    n := ios.keywait                                    'auf taste warten
+    case n
+      $0d:                quit                          'Enter, Eingabe beenden
+      ios#CHAR_BS:        if i > 0                      'Zurück
+                            ios.printbs
+                            i--
+                            byte[@input_str][i] := 0
+      9 .. 13, 32 .. 255: if i < input_len              'normales zeichen
+                            ios.printchar(n)
+                            byte[@input_str][i] := n
+                            i++
+                            byte[@input_str][i] := 0
+
   ios.curoff
 
 PRI readLine(timeout) : ch
@@ -1038,6 +1125,10 @@ PRI readLine(timeout) : ch
       receive_str[readpos] := 0
       readpos := 0
       return(TRUE)
+
+  ifnot ios.lan_isConnected(handleidx)             'Verbindung unterbrochen
+    ircClose
+    return(FALSE)
 
   if (readpos <> 0) and ((cnt - t1char) / (clkfreq / 1000) > timeout)     'Timeout seit Empfang 1. Zeichen
       receive_str[readpos] := 0
@@ -1071,7 +1162,28 @@ PUB findCharacterBack(charactersToSearch, characterToFind) | i
       return charactersToSearch + i
 
   return 0
+PRI ledStart
 
+  ifnot ledcog
+    ledcog := cognew(ledTwinkle(clkfreq/150), @ledstack)
+
+PRI ledStop
+
+  if ledcog
+    cogstop(ledcog)
+    ledcog := 0
+
+PRI ledTwinkle(rate)
+
+  repeat
+
+    repeat brightness from 0 to 100
+      led.LEDBrightness(brightness, gc#HBEAT)  'Adjust LED brightness
+      waitcnt(rate + cnt)                      'Wait a moment
+
+    repeat brightness from 100 to 0
+      led.LEDBrightness(brightness,gc#HBEAT)   'Adjust LED brightness
+      waitcnt(rate + cnt)                      'Wait a moment
 DAT
 
 strWin1     byte  "Chat",0
