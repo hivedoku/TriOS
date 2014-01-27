@@ -120,8 +120,14 @@ PUB main | key
         gc#KEY_TAB:     f_focus
         gc#KEY_CURUP:   f_scrolldown
         gc#KEY_CURDOWN: f_scrollup
+        gc#KEY_F01:     f_help
         gc#KEY_F02:     f_setconf
         gc#KEY_F03:     f_connect
+        gc#KEY_F04:     f_join
+        gc#KEY_F05:     f_part
+        gc#KEY_F06:     f_nick
+        gc#KEY_F07:     f_user
+        gc#KEY_F08:     f_pass
         gc#KEY_F09:     f_close
         gc#KEY_F10:     f_quit
         other:          if focus == 3
@@ -155,7 +161,8 @@ PRI init
   setscreen
   conf_load
   if ip_addr == 0
-    f_setconf
+    ifnot f_setconf
+      handleStatusStr(string("Bitte Konfiguration neu starten (F2)"), 2, FALSE)
 
 PRI f_focus
 
@@ -214,10 +221,26 @@ PRI f_scrolldown | lineAddr, lineNum, lineMax
 
     printBufWin(lineAddr)
 
+PRI f_help
+
+  ios.winset(5)
+  ios.printcls
+  ios.winoframe
+  ios.curhome
+  ios.curoff
+  ios.setcolor(COL_DEFAULT)
+  ios.print(@strHelp)
+  repeat until ios.keystat > 0
+    waitcnt(cnt + clkfreq)        '1sek warten
+  ios.key
+  win_redraw
+  win_contentRefresh
+
 PRI f_setconf | i,n
 
   ifnot confServer
-    return(TRUE)
+    win_contentRefresh
+    return(FALSE)
   confPass
   confNick
   confUser
@@ -228,10 +251,43 @@ PRI f_setconf | i,n
 
 PRI f_connect
 
+  ircClose      'Falls bereits eine Verbindung besteht
   ircConnect
   ircPass
   ircReg
   ircJoin
+
+PRI f_join
+
+  if joined
+    handleStatusStr(string("Kanal bereits betreten, vorher mit F5 (/part) verlassen"), 2, FALSE)
+  else
+    confChannel
+    win_contentRefresh
+    ircJoin
+
+PRI f_part
+
+  ircPart(0)
+  handleChatStr(@channel, @nickname, string("/part"), 1)
+
+PRI f_nick
+
+  confNick
+  win_contentRefresh
+  ircNick
+
+PRI f_user
+
+  confUser
+  win_contentRefresh
+  handleStatusStr(string("User geändert, zum Anwenden neu verbinden"), 2, FALSE)
+
+PRI f_pass
+
+  confPass
+  win_contentRefresh
+  handleStatusStr(string("Paßwort geändert, zum Anwenden neu verbinden"), 2, FALSE)
 
 PRI f_close
 
@@ -273,7 +329,7 @@ PRI confServer
     IpPortToStr(ip_addr, ip_port)
   input(string("IRC-Server angeben (IP:Port):"),@temp_str ,21)
   ifnot strToIpPort(@input_str, @ip_addr, @ip_port)
-    handleStatusStr(string("Fehlerhafte Eingabe von IP-Adresse und Port des IRC-Servers."), 2, TRUE)
+    handleStatusStr(string("Fehlerhafte Eingabe von IP-Adresse und Port des Servers."), 2, FALSE)
     return (FALSE)
   return(TRUE)
 
@@ -392,7 +448,7 @@ PRI ircConnect | t
     return(-1)
   ifnot (ios.lan_waitconntimeout(handleidx, 2000))
     handleStatusStr(string("Verbindung mit IRC-Server konnte nicht aufgebaut werden."), 2, TRUE)
-    f_close
+    ircClose
     return(-1)
   handleStatusStr(string("Verbunden, warte auf Bereitschaft..."), 2, TRUE)
 
@@ -411,18 +467,28 @@ PRI ircClose
 
 PRI ircPass
 
-  handleStatusStr(string("Sende Paßwort..."), 2, TRUE)
+  if handleidx == $FF
+    handleStatusStr(string("Kann Paßwort nicht setzen (keine Verbindung zum Server)"), 2, FALSE)
+    return(-1)
+  else
+    handleStatusStr(string("Sende Paßwort..."), 2, TRUE)
   if sendStr(string("PASS ")) or sendStr(@password) or sendStr(string(13,10))
     handleStatusStr(string("Fehler beim Senden des Paßwortes"), 2, TRUE)
     return(-1)
 
 PRI ircNick
 
+  if handleidx == $FF
+    return(-1)
   if sendStr(string("NICK ")) or sendStr(@nickname) or sendStr(string(13,10))
     handleStatusStr(string("Fehler beim Senden des Nicknamens"), 2, TRUE)
     return(-1)
 
 PRI ircReg
+
+  if handleidx == $FF
+    handleStatusStr(string("Anmeldung nicht möglich (keine Verbindung zum Server)"), 2, FALSE)
+    return(-1)
 
   handleStatusStr(string("Sende Nickname und Benutzerinformationen..."), 2, TRUE)
 
@@ -436,7 +502,7 @@ PRI ircReg
 
 PRI ircJoin
 
-  ifnot strsize(@channel) == 0
+  if strsize(@channel) > 0 and handleidx <> $FF
     if sendStr(string("JOIN ")) or sendStr(@channel) or sendStr(string(13,10))
       handleStatusStr(string("Fehler beim Verbinden mit Channel"), 2, TRUE)
       return(-1)
@@ -444,15 +510,15 @@ PRI ircJoin
     joined := TRUE
     title_draw
 
-PRI ircPart
+PRI ircPart(strMsg)
 
+  if handleidx <> $FF
     sendStr(string("PART "))
     sendStr(@channel)
-    if send_str[5] == " "
-      sendStr(@send_str[5])
+    if strMsg
+      sendStr(strMsg)                               'optionale Mitteilung (Leerzeichen an erster Stelle)
     sendStr(string(13,10))
     channel[0] := 0
-    handleChatStr(@channel, @nickname, @send_str, 1)
 
     joined := FALSE
     title_draw
@@ -530,7 +596,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
       if (str.replaceCharacter(prefixstr, "!", 0))
         repeat x from 0 to strsize(prefixstr) - 1
           temp_str[x] := byte[prefixstr][x]
-        msgstr := string(" hat seinen Nicknamen geändert in ")
+        msgstr := string(":Nickname geändert in ")
         repeat i from 0 to strsize(msgstr) - 1
           temp_str[x++] := byte[msgstr][i]
         msgstr := commandstr + 5
@@ -631,7 +697,11 @@ PRI ircPutLine | i
         win_contentRefresh
       ircJoin
   elseif str.startsWithCharacters(@send_str, string("/part")) 'Channel verlassen
-    ircPart
+    if send_str[5] == " "                                     'Mitteilung folgt
+      ircPart(@send_str[5])                                   'Mitteilung mit Leerzeichen an erster Stelle
+    else
+      ircPart(0)
+    handleChatStr(@channel, @nickname, @send_str, 1)
   elseif str.startsWithCharacters(@send_str, string("/msg"))  'Message an Nickname
     sendStr(string("PRIVMSG "))
     if (i := str.replaceCharacter(@send_str[5], " ", 0))
@@ -814,8 +884,11 @@ PRI setscreen | buflen[4], i
   title_draw
   win_draw
 
-  'Eingabe-Fenster (Nr. 4)
+  'Konfigurations-Fenster (Nr. 4)
   ios.windefine(4,13,10,47,13)
+
+  'Hilfe-Fenster (Nr. 5)
+  ios.windefine(5,1,2,62,22)
 
 PRI printTime | timeStr, i
 '' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -1191,6 +1264,29 @@ strWin2     byte  "Status",0
 strWin3     byte  "Eingabe",0
 
 strConfFile byte  "irc.cfg",0
+
+'                  |------------------------------------------------------------|
+strHelp byte      "Interne Befehle:"
+        byte  $0d,"================"
+        byte  $0d
+        byte  $0d,"F1        Diese Hilfe"
+        byte  $0d,"F2  /set  Alle Einstellungen bearbeiten und abspeichern"
+        byte  $0d,"F3        Mit Server verbinden, anmelden und Kanal betreten"
+        byte  $0d,"F4  /join Kanal betreten (/join #<Kanal>)"
+        byte  $0d,"F5  /part Aktuellen Kanal verlassen (/part <Mitteilung>)"
+        byte  $0d,"F6  /nick Nicknamen ändern (/nick <neuer Nick>)"
+        byte  $0d,"F7  /user Benutzernamen ändern"
+        byte  $0d,"F8  /pass Paßwort ändern"
+        byte  $0d,"F9  /quit Verbindung zu Server trennen"
+        byte  $0d,"F10       Programm beenden"
+        byte  $0d,"    /msg  Private Mitteilung (/msg <Empfänger> <Text>)"
+        byte  $0d,"    /srv  Mit Server verbinden und anmelden (srv <IP:Port>)"
+        byte  $0d,"    /save Einstellungen speichern"
+        byte  $0d,"Tab       Fenster umschalten, scrollen mit Corsor hoch/runter"
+        byte  $0d
+        byte  $0d,"Alle anderen mit '/' beginnenden Eingaben sind Befehle an den"
+        byte  $0d,"Server. Alle Eingaben, welche nicht mit '/' beginnen, sind"
+        byte  $0d,"eine öffentliche Mitteilung an den aktuellen Kanal.",$0
 
 DAT                                                     'lizenz
 
