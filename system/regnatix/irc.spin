@@ -59,8 +59,10 @@ COL_STTIME      = 8    'aktuelle Zeit im Status-Fenster
 COL_CHAN        = 5    'Channel in Message-Zeile
 COL_NICK        = 4    'Nickname in Message-Zeile
 COL_MYNICK      = 2    'Nickname in selbst geschriebener Message-Zeile
+COL_PRIVNICK    = 7    'Nickname in privater Message-Zeile
 COL_MSG         = 0    'Text der Message-Zeile
 COL_MYMSG       = 6    'Text in selbst geschriebener Message-Zeile
+COL_PRIVMSG     = 7    'Text in privater Message-Zeile
 
 LEN_PASS        = 32
 LEN_NICK        = 32
@@ -484,7 +486,7 @@ PRI ircNick
     handleStatusStr(string("Fehler beim Senden des Nicknamens"), 2, TRUE)
     return(-1)
 
-PRI ircReg
+PRI ircReg | t
 
   if handleidx == $FF
     handleStatusStr(string("Anmeldung nicht möglich (keine Verbindung zum Server)"), 2, FALSE)
@@ -498,7 +500,9 @@ PRI ircReg
     handleStatusStr(string("Fehler beim Senden der Benutzerinformationen"), 2, TRUE)
     return(-1)
 
-  waitcnt(cnt + clkfreq)        '1sek warten
+  t := cnt
+  repeat until (cnt - t) / clkfreq > 3    '3s lang Meldungen des Servers entgegennehmen
+    ircGetline
 
 PRI ircJoin
 
@@ -557,6 +561,10 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
               if byte[chanstr] == "#"                                         'Message an Channel
                 handleChatStr(chanstr, nickstr, msgstr, 0)
               else                                                            'Message an mich
+                msgstr -= 7                                                   '"[priv] " vor Message schreiben
+                x := string("[priv] ")
+                repeat i from 0 to 6
+                  byte[msgstr][i] := byte[x][i]
                 handleChatStr(string("<priv>"), nickstr, msgstr, 2)
     elseif str.startsWithCharacters(commandstr, string("PING :"))             'PING
       handleStatusStr(string("PING erhalten, sende PONG"), 2, TRUE)
@@ -625,6 +633,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
                     title_draw
         372:      handleStatusStr(msgstr + 3, 1, FALSE)                       'MOTD
         375..376:
+        451:
         other:    repeat x from 0 to strsize(commandstr) - 1                  'unbehandelter Return-Code
                     temp_str[x] := byte[commandstr][x]
                   temp_str[x++] := ":"
@@ -926,10 +935,10 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, timenicklen, msglineend, ch
   print_str[print_str_ptr++] := 0
 
 '2. Teilstring: Nickname
-  if me == 1
-    print_str[print_str_ptr++] := COL_MYNICK  'Farbbyte
-  else
-    print_str[print_str_ptr++] := COL_NICK    'Farbbyte
+  case me
+    0: print_str[print_str_ptr++] := COL_NICK     'Farbbyte
+    1: print_str[print_str_ptr++] := COL_MYNICK   'Farbbyte
+    2: print_str[print_str_ptr++] := COL_PRIVNICK 'Farbbyte
   print_str[print_str_ptr++] := ">"
   repeat i from 0 to strsize(nickstr) - 1     'Länge Nickname ohne Abschluß-Null
     print_str[print_str_ptr++] := byte[nickstr][i]
@@ -938,10 +947,10 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, timenicklen, msglineend, ch
   print_str[print_str_ptr++] := 0
 
 '3. Teilstring: 1. Teil  der Mitteilung
-  if me == 1
-    print_str[print_str_ptr++] := COL_MYMSG   'Farbbyte
-  else
-    print_str[print_str_ptr++] := COL_MSG     'Farbbyte
+  case me
+    0: print_str[print_str_ptr++] := COL_MSG     'Farbbyte
+    1: print_str[print_str_ptr++] := COL_MYMSG   'Farbbyte
+    2: print_str[print_str_ptr++] := COL_PRIVMSG 'Farbbyte
   timenicklen := strsize(nickstr) + 10
   msglineend := cols - timenicklen -2
   repeat until lastline
@@ -963,10 +972,10 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, timenicklen, msglineend, ch
       printStrWin(@print_str)                      'im Chatfenster anzeigen
     printStrBuf(1)                                 'in Fensterpuffer schreiben
     ifnot lastline                                 'wenn noch eine zeile folgt, diese bereits beginnen
-      if me == 1
-        print_str[print_str_ptr++] := COL_MYMSG    'nach Zeilenumbruch beginnt neue Zeile wieder mit Farbbyte
-      else
-        print_str[print_str_ptr++] := COL_MSG
+      case me
+        0: print_str[print_str_ptr++] := COL_MSG     'Farbbyte
+        1: print_str[print_str_ptr++] := COL_MYMSG   'Farbbyte
+        2: print_str[print_str_ptr++] := COL_PRIVMSG 'Farbbyte
       repeat timenicklen                           '"Tab" bis Ende Anzeige Channel + Nickname
         print_str[print_str_ptr++] := " "
       if space
