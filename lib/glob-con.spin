@@ -161,7 +161,8 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_rtcSetNVSRAM                                  'Sets the NVSRAM to the selected value (0 - 255) at the index (0 - 55).
         a_rtcGetNVSRAM                                  'Gets the selected NVSRAM value at the index (0 - 55).
         a_rtcPauseForSec                                'Pauses execution for a number of seconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of seconds to pause for between 0 and 2,147,483,647.
-        a_rtcPauseForMSec '58                           'Pauses execution for a number of milliseconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of milliseconds to pause for between 0 and 2,147,483,647.
+        a_rtcPauseForMSec                               'Pauses execution for a number of milliseconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of milliseconds to pause for between 0 and 2,147,483,647.
+        a_rtcTest         '59                           'Test if RTC Chip is available
 
 '       ----------------------------------------------  LAN-FUNKTIONEN
 #71,    a_lanStart                                      'Start Network

@@ -204,6 +204,10 @@ OBJ
   gc              : "glob-con"       'globale konstanten
   num             : "glob-numbers"   'Number Engine
 
+DAT
+
+  strNVRAMFile byte  "nvram.sav",0                      'contains the 56 bytes of NVRAM, if RTC is not available
+
 VAR
 
   long  dmarker[6]                                      'speicher für dir-marker
@@ -288,6 +292,7 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_rtcGetNVSRAM: rtc_getNVSRAM                'Gets the selected NVSRAM value at the index (0 - 55).
         gc#a_rtcPauseForSec: rtc_pauseForSeconds        'Pauses execution for a number of seconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of seconds to pause for between 0 and 2,147,483,647.
         gc#a_rtcPauseForMSec: rtc_pauseForMilliseconds  'Pauses execution for a number of milliseconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of milliseconds to pause for between 0 and 2,147,483,647.
+        gc#a_rtcTest: rtc_test                          'Test if RTC Chip is available
 
 '       ----------------------------------------------  LAN-FUNKTIONEN
         gc#a_lanStart: lan_start                        'Start Network
@@ -1109,9 +1114,27 @@ PRI rtc_pauseForMilliseconds                            'rtc: Pauses execution f
 ''                              : Returns a puesdo random value derived from the current clock frequency and the time when called.
   sub_putlong(rtc.pauseForMilliseconds(sub_getlong))
 
+PRI probeRTC | hiveid
+
+  hiveid := rtc.getNVSRAM(NVRAM_HIVE)         'read first byte of hive id
+
+  rtc.setNVSRAM(NVRAM_HIVE, hiveid ^ $F)      'write back to NVRAM with flipped all bits
+  if rtc.getNVSRAM(NVRAM_HIVE) == hiveid ^ $F 'flipped bits are stored?
+    rtc.setNVSRAM(NVRAM_HIVE, hiveid)         'restore first byte of hive id
+    return(TRUE)                              'RTC found
+  else
+    rtc.setNVSRAM(NVRAM_HIVE, hiveid)         'still restore first byte of hive id
+    return(FALSE)                             'no RTC found
+
+PRI rtc_test                                            'rtc: Test if RTC Chip is available
+''funktionsgruppe               : rtc
+''busprotokoll                  : [059][put.avaliable]
+''                              : Returns TRUE if RTC is available, otherwise FALSE
+    bus_putchar(probeRTC)
+
 CON ''------------------------------------------------- LAN-FUNKTIONEN
 
-PRI lan_start | hiveid, hivestr, strpos, macpos, i
+PRI lan_start | hiveid, hivestr, strpos, macpos, i, a
 ''funktionsgruppe               : lan
 ''funktion                      : Netzwerk starten
 ''eingabe                       : -
@@ -1126,30 +1149,30 @@ PRI lan_start | hiveid, hivestr, strpos, macpos, i
       bufidx[i++] := $FF  '0xFF: nicht zugewiesen
 
     'IP-Parameter setzen
-    ip_addr := rtc.getNVSRAM(NVRAM_IPADDR)
-    ip_addr[1] := rtc.getNVSRAM(NVRAM_IPADDR+1)
-    ip_addr[2] := rtc.getNVSRAM(NVRAM_IPADDR+2)
-    ip_addr[3] := rtc.getNVSRAM(NVRAM_IPADDR+3)
+    if probeRTC
+      repeat a from 0 to 15
+        ip_addr[a] := rtc.getNVSRAM(NVRAM_IPADDR+a)                ' fill addresses
+      hiveid := rtc.getNVSRAM(NVRAM_HIVE)
+      hiveid += rtc.getNVSRAM(NVRAM_HIVE+1) << 8
+      hiveid += rtc.getNVSRAM(NVRAM_HIVE+2) << 16
+      hiveid += rtc.getNVSRAM(NVRAM_HIVE+3) << 24
+    else
+      dmarker[UMARKER] := sdfat.getDirCluster                       'u-marker setzen
+      ifnot dmarker[SMARKER] == TRUE                                's-marker aktivieren
+        sdfat.setDirCluster(dmarker[SMARKER])
+      ifnot \sdfat.openFile(@strNVRAMFile, "R")
+        \sdfat.setCharacterPosition(NVRAM_IPADDR)
+        repeat a from 0 to 15
+          ip_addr[a] := \sdfat.readCharacter                        ' fill addresses
+        \sdfat.setCharacterPosition(NVRAM_HIVE)
+        hiveid := \sdfat.readCharacter
+        hiveid += \sdfat.readCharacter << 8
+        hiveid += \sdfat.readCharacter << 16
+        hiveid += \sdfat.readCharacter << 24
+        \sdfat.closeFile
+      ifnot dmarker[UMARKER] == TRUE                                'U-marker aktivieren
+        sdfat.setDirCluster(dmarker[UMARKER])
 
-    ip_subnet := rtc.getNVSRAM(NVRAM_IPMASK)
-    ip_subnet[1] := rtc.getNVSRAM(NVRAM_IPMASK+1)
-    ip_subnet[2] := rtc.getNVSRAM(NVRAM_IPMASK+2)
-    ip_subnet[3] := rtc.getNVSRAM(NVRAM_IPMASK+3)
-
-    ip_gateway := rtc.getNVSRAM(NVRAM_IPGW)
-    ip_gateway[1] := rtc.getNVSRAM(NVRAM_IPGW+1)
-    ip_gateway[2] := rtc.getNVSRAM(NVRAM_IPGW+2)
-    ip_gateway[3] := rtc.getNVSRAM(NVRAM_IPGW+3)
-
-    ip_dns := rtc.getNVSRAM(NVRAM_IPDNS)
-    ip_dns[1] := rtc.getNVSRAM(NVRAM_IPDNS+1)
-    ip_dns[2] := rtc.getNVSRAM(NVRAM_IPDNS+2)
-    ip_dns[3] := rtc.getNVSRAM(NVRAM_IPDNS+3)
-
-    hiveid :=          rtc.getNVSRAM(NVRAM_HIVE)
-    hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+1) << 8
-    hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+2) << 16
-    hiveid := hiveid + rtc.getNVSRAM(NVRAM_HIVE+3) << 24
     hivestr := num.ToStr(hiveid, num#DEC)
     strpos := strsize(hivestr)
     macpos := 5

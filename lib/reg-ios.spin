@@ -1025,6 +1025,13 @@ PUB pauseForMilliseconds(number)                        'Pauses execution for a 
   bus_putchar1(gc#a_rtcPauseForMSec)
   return bus_getlong1
 
+PUB rtcTest: available                                  'Test if RTC Chip is available
+''funktionsgruppe               : rtc
+''busprotokoll                  : [059][get.avaliable]
+''                              : Returns TRUE if RTC is available, otherwise FALSE
+  bus_putchar1(gc#a_rtcTest)
+  available := bus_getchar1
+  available := ~available
 
 CON ''------------------------------------------------- LAN_FUNKTIONEN
 

@@ -84,6 +84,10 @@ CON 'NVRAM Konstanten ----------------------------------------------------------
 #20,    NVRAM_IPBOOT
 #24,    NVRAM_HIVE       ' 4 Bytes
 
+DAT
+
+  strNVRAMFile byte  "nvram.sav",0                      'contains the 56 bytes of NVRAM, if RTC is not available
+
 VAR
 
   long  t1char                                'Empfangs-Zeitpunkt des 1. Zeichen einer Zeile
@@ -157,14 +161,14 @@ PRI init
 
   ios.start                                             'ios initialisieren
   ifnot (ios.admgetspec & LANMASK)
-    ios.print(string(13,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",13,"Bitte admnet laden.",13))
+    ios.print(@strNoNetwork)
     ios.stop
-  ios.print(string(13,"Initialisiere, bitte warten...",13))
+  ios.print(@strInitWait)
   setscreen
   conf_load
   if ip_addr == 0
     ifnot f_setconf
-      handleStatusStr(string("Bitte Konfiguration neu starten (F2)"), 2, FALSE)
+      handleStatusStr(@strRestartConf, 2, FALSE)
 
 PRI f_focus
 
@@ -262,7 +266,7 @@ PRI f_connect
 PRI f_join
 
   if joined
-    handleStatusStr(string("Kanal bereits betreten, vorher mit F5 (/part) verlassen"), 2, FALSE)
+    handleStatusStr(@strAlreadyJoined, 2, FALSE)
   else
     confChannel
     win_contentRefresh
@@ -283,13 +287,13 @@ PRI f_user
 
   confUser
   win_contentRefresh
-  handleStatusStr(string("User geändert, zum Anwenden neu verbinden"), 2, FALSE)
+  handleStatusStr(@strUserChanged, 2, FALSE)
 
 PRI f_pass
 
   confPass
   win_contentRefresh
-  handleStatusStr(string("Paßwort geändert, zum Anwenden neu verbinden"), 2, FALSE)
+  handleStatusStr(@strPassChanged, 2, FALSE)
 
 PRI f_close
 
@@ -329,15 +333,15 @@ PRI confServer
     temp_str[0] := 0
   else
     IpPortToStr(ip_addr, ip_port)
-  input(string("IRC-Server angeben (IP:Port):"),@temp_str ,21)
+  input(@strInputSrv,@temp_str ,21)
   ifnot strToIpPort(@input_str, @ip_addr, @ip_port)
-    handleStatusStr(string("Fehlerhafte Eingabe von IP-Adresse und Port des Servers."), 2, FALSE)
+    handleStatusStr(@strErrorAddr, 2, FALSE)
     return (FALSE)
   return(TRUE)
 
 PRI confPass | i,n
 
-  input(string("Paßwort eingeben:"),@password,LEN_PASS)
+  input(@strInputPass,@password,LEN_PASS)
   n := 1
   repeat i from 0 to LEN_PASS
     if n == 0
@@ -348,7 +352,7 @@ PRI confPass | i,n
 
 PRI confNick | i,n
 
-  input(string("Nickname eingeben:"),@nickname,LEN_NICK)
+  input(@strInputNick,@nickname,LEN_NICK)
   n := 1
   repeat i from 0 to LEN_NICK
     if n == 0
@@ -359,7 +363,7 @@ PRI confNick | i,n
 
 PRI confUser | i,n
 
-  input(string("Username eingeben:"),@username,LEN_USER)
+  input(@strInputUser,@username,LEN_USER)
   n := 1
   repeat i from 0 to LEN_USER
     if n == 0
@@ -370,7 +374,7 @@ PRI confUser | i,n
 
 PRI confChannel | i,n
 
-  input(string("Channel eingeben:"),@channel,LEN_CHAN)
+  input(@strInputChannel,@channel,LEN_CHAN)
   n := 1
   repeat i from 0 to LEN_CHAN
     if n == 0
@@ -406,7 +410,7 @@ PRI confSave | i
 
   ios.sddmact(ios#DM_USER)                                      'u-marker aktivieren
 
-  handleStatusStr(string("Konfiguration gespeichert."), 2, TRUE)
+  handleStatusStr(@strConfigSaved, 2, TRUE)
 
 PRI conf_load | i
 
@@ -434,25 +438,37 @@ PRI conf_load | i
 
   ios.sddmact(ios#DM_USER)                                      'u-marker aktivieren
 
-  hiveid := ios.getNVSRAM(NVRAM_HIVE)
-  hiveid += ios.getNVSRAM(NVRAM_HIVE+1) << 8
-  hiveid += ios.getNVSRAM(NVRAM_HIVE+2) << 16
-  hiveid += ios.getNVSRAM(NVRAM_HIVE+3) << 24
+  if ios.rtcTest                                                'RTC chip available?
+    hiveid := ios.getNVSRAM(NVRAM_HIVE)
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+1) << 8
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+2) << 16
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+3) << 24
+  else
+    ios.sddmset(ios#DM_USER)                                    'u-marker setzen
+    ios.sddmact(ios#DM_SYSTEM)                                  's-marker aktivieren
+    ifnot ios.sdopen("R",@strNVRAMFile)
+      ios.sdseek(NVRAM_HIVE)
+      hiveid := ios.sdgetc
+      hiveid += ios.sdgetc << 8
+      hiveid += ios.sdgetc << 16
+      hiveid += ios.sdgetc << 24
+      ios.sdclose
+    ios.sddmact(ios#DM_USER)                                    'u-marker aktivieren
 
 PRI ircConnect | t
 
   joined := FALSE
 
-  handleStatusStr(string("Verbinde mit IRC-Server..."), 2, TRUE)
+  handleStatusStr(@strConnect, 2, TRUE)
   ios.lanstart
   if (handleidx := ios.lan_connect(ip_addr, ip_port)) == $FF
-    handleStatusStr(string("Kein Socket frei!"), 2, TRUE)
+    handleStatusStr(@strErrorNoSocket, 2, TRUE)
     return(-1)
   ifnot (ios.lan_waitconntimeout(handleidx, 2000))
-    handleStatusStr(string("Verbindung mit IRC-Server konnte nicht aufgebaut werden."), 2, TRUE)
+    handleStatusStr(@@strErrorConnect, 2, TRUE)
     ircClose
     return(-1)
-  handleStatusStr(string("Verbunden, warte auf Bereitschaft..."), 2, TRUE)
+  handleStatusStr(@strWaitConnect, 2, TRUE)
 
   t := cnt
   repeat until (cnt - t) / clkfreq > 1    '1s lang Meldungen des Servers entgegennehmen
@@ -463,19 +479,19 @@ PRI ircClose
   ifnot handleidx == $FF
     ios.lan_close(handleidx)
     handleidx := $FF
-    handleStatusStr(string("Verbindung mit IRC-Server getrennt..."), 2, TRUE)
+    handleStatusStr(@strDisconnect, 2, TRUE)
 
     title_draw
 
 PRI ircPass
 
   if handleidx == $FF
-    handleStatusStr(string("Kann Paßwort nicht setzen (keine Verbindung zum Server)"), 2, FALSE)
+    handleStatusStr(@strErrorPassConn, 2, FALSE)
     return(-1)
   else
-    handleStatusStr(string("Sende Paßwort..."), 2, TRUE)
+    handleStatusStr(@strSendPass, 2, TRUE)
   if sendStr(string("PASS ")) or sendStr(@password) or sendStr(string(13,10))
-    handleStatusStr(string("Fehler beim Senden des Paßwortes"), 2, TRUE)
+    handleStatusStr(@strErrorSendPass, 2, TRUE)
     return(-1)
 
 PRI ircNick
@@ -483,21 +499,21 @@ PRI ircNick
   if handleidx == $FF
     return(-1)
   if sendStr(string("NICK ")) or sendStr(@nickname) or sendStr(string(13,10))
-    handleStatusStr(string("Fehler beim Senden des Nicknamens"), 2, TRUE)
+    handleStatusStr(@strErrorSendNick, 2, TRUE)
     return(-1)
 
 PRI ircReg | t
 
   if handleidx == $FF
-    handleStatusStr(string("Anmeldung nicht möglich (keine Verbindung zum Server)"), 2, FALSE)
+    handleStatusStr(@strErrorRegConn, 2, FALSE)
     return(-1)
 
-  handleStatusStr(string("Sende Nickname und Benutzerinformationen..."), 2, TRUE)
+  handleStatusStr(@strSendNickReg, 2, TRUE)
 
   ircNick
 
   if sendStr(string("USER ")) or sendStr(@username) or sendStr(string(" 8 * :Hive #")) or sendStr(str.trimCharacters(num.ToStr(hiveid, num#DEC))) or sendStr(string(13,10))
-    handleStatusStr(string("Fehler beim Senden der Benutzerinformationen"), 2, TRUE)
+    handleStatusStr(@strErrorSendReg, 2, TRUE)
     return(-1)
 
   t := cnt
@@ -508,7 +524,7 @@ PRI ircJoin
 
   if strsize(@channel) > 0 and handleidx <> $FF
     if sendStr(string("JOIN ")) or sendStr(@channel) or sendStr(string(13,10))
-      handleStatusStr(string("Fehler beim Verbinden mit Channel"), 2, TRUE)
+      handleStatusStr(@strErrorSendJoin, 2, TRUE)
       return(-1)
 
     joined := TRUE
@@ -567,7 +583,9 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
                   byte[msgstr][i] := byte[x][i]
                 handleChatStr(string("<priv>"), nickstr, msgstr, 2)
     elseif str.startsWithCharacters(commandstr, string("PING :"))             'PING
-      handleStatusStr(string("PING erhalten, sende PONG"), 2, TRUE)
+#ifdef __DEBUG
+      handleStatusStr(@strPingPong, 2, TRUE)
+#endif
       byte[commandstr][1] := "O"
       sendStr(commandstr)
       sendStr(string(13,10))
@@ -575,7 +593,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
       if (str.replaceCharacter(prefixstr, "!", 0))
         repeat x from 0 to strsize(prefixstr) - 1
           temp_str[x] := byte[prefixstr][x]
-        msgstr := string(" hat den Kanal betreten")
+        msgstr := @strJoin
         repeat i from 0 to strsize(msgstr) - 1
           temp_str[x++] := byte[msgstr][i]
         temp_str[x] := 0
@@ -584,7 +602,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
       if (str.replaceCharacter(prefixstr, "!", 0))
         repeat x from 0 to strsize(prefixstr) - 1
           temp_str[x] := byte[prefixstr][x]
-        msgstr := string(" hat den Kanal verlassen")
+        msgstr := @strPart
         repeat i from 0 to strsize(msgstr) - 1
           temp_str[x++] := byte[msgstr][i]
         temp_str[x] := 0
@@ -593,7 +611,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
       if (str.replaceCharacter(prefixstr, "!", 0))
         repeat x from 0 to strsize(prefixstr) - 1
           temp_str[x] := byte[prefixstr][x]
-        msgstr := string(" hat den Server verlassen")
+        msgstr := @strLeaveServer
         repeat i from 0 to strsize(msgstr) - 1
           temp_str[x++] := byte[msgstr][i]
         temp_str[x] := 0
@@ -604,7 +622,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
       if (str.replaceCharacter(prefixstr, "!", 0))
         repeat x from 0 to strsize(prefixstr) - 1
           temp_str[x] := byte[prefixstr][x]
-        msgstr := string(":Nickname geändert in ")
+        msgstr := @strChangeNick
         repeat i from 0 to strsize(msgstr) - 1
           temp_str[x++] := byte[msgstr][i]
         msgstr := commandstr + 5
@@ -620,7 +638,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
       msgstr := str.replaceCharacter(nickstr, " ", 0)
       case num.FromStr(commandstr, num#DEC)
         1:        if prefixstr
-                    msgstr := string("Verbunden mit ")
+                    msgstr := @strConnected
                     repeat x from 0 to strsize(msgstr) - 1
                       temp_str[x] := byte[msgstr][x]
                     repeat i from 0 to LEN_IRCSRV
@@ -658,7 +676,7 @@ PRI ircPutLine | i
   elseif str.startsWithCharacters(@send_str, string("/srv"))  'mit Server verbinden
     if send_str[4] == " " and send_str[5] <> " " and send_str[5] <> 0 'Nick als Parameter angegeben
       ifnot strToIpPort(@send_str[5], @ip_addr, @ip_port)
-        handleStatusStr(string("Fehlerhafte Eingabe von IP-Adresse und Port des IRC-Servers."), 2, TRUE)
+        handleStatusStr(@strErrorAddr, 2, TRUE)
         return (FALSE)
     else
       ifnot confServer                                      'Eingabefenster
@@ -675,7 +693,7 @@ PRI ircPutLine | i
   elseif str.startsWithCharacters(@send_str, string("/pass")) 'Paßwort ändern
     confPass
     win_contentRefresh
-    handleStatusStr(string("Paßwort geändert, zum Anwenden neu verbinden"), 2, FALSE)
+    handleStatusStr(@strPassChanged, 2, FALSE)
   elseif str.startsWithCharacters(@send_str, string("/nick")) 'Nickname ändern
     if send_str[5] == " " and send_str[6] <> " " and send_str[6] <> 0 'Nick als Parameter angegeben
       repeat i from 0 to LEN_NICK
@@ -690,10 +708,10 @@ PRI ircPutLine | i
   elseif str.startsWithCharacters(@send_str, string("/user")) 'User ändern
     confUser
     win_contentRefresh
-    handleStatusStr(string("User geändert, zum Anwenden neu verbinden"), 2, FALSE)
+    handleStatusStr(@strUserChanged, 2, FALSE)
   elseif str.startsWithCharacters(@send_str, string("/join")) 'mit Channel verbinden
     if joined
-      handleStatusStr(string("Kanal bereits betreten, vorher mit /part verlassen"), 2, FALSE)
+      handleStatusStr(@strAlreadyJoined, 2, FALSE)
     else
       if send_str[5] == " " and send_str[6] == "#"            'Channel als Parameter angegeben
         repeat i from 0 to LEN_CHAN
@@ -1266,36 +1284,138 @@ PRI ledTwinkle(rate)
     repeat brightness from 100 to 0
       led.LEDBrightness(brightness,gc#HBEAT)   'Adjust LED brightness
       waitcnt(rate + cnt)                      'Wait a moment
-DAT
+DAT ' Locale
 
-strWin1     byte  "Chat",0
-strWin2     byte  "Status",0
-strWin3     byte  "Eingabe",0
+#ifdef __LANG_EN
+  'locale: english
 
-strConfFile byte  "irc.cfg",0
+  strConfFile byte  "irc.cfg",0
 
-'                  |------------------------------------------------------------|
-strHelp byte      "Interne Befehle:"
-        byte  $0d,"================"
-        byte  $0d
-        byte  $0d,"F1        Diese Hilfe"
-        byte  $0d,"F2  /set  Alle Einstellungen bearbeiten und abspeichern"
-        byte  $0d,"F3        Mit Server verbinden, anmelden und Kanal betreten"
-        byte  $0d,"F4  /join Kanal betreten (/join #<Kanal>)"
-        byte  $0d,"F5  /part Aktuellen Kanal verlassen (/part <Mitteilung>)"
-        byte  $0d,"F6  /nick Nicknamen ändern (/nick <neuer Nick>)"
-        byte  $0d,"F7  /user Benutzernamen ändern"
-        byte  $0d,"F8  /pass Paßwort ändern"
-        byte  $0d,"F9  /quit Verbindung zu Server trennen"
-        byte  $0d,"F10       Programm beenden"
-        byte  $0d,"    /msg  Private Mitteilung (/msg <Empfänger> <Text>)"
-        byte  $0d,"    /srv  Mit Server verbinden und anmelden (srv <IP:Port>)"
-        byte  $0d,"    /save Einstellungen speichern"
-        byte  $0d,"Tab       Fenster umschalten, scrollen mit Corsor hoch/runter"
-        byte  $0d
-        byte  $0d,"Alle anderen mit '/' beginnenden Eingaben sind Befehle an den"
-        byte  $0d,"Server. Alle Eingaben, welche nicht mit '/' beginnen, sind"
-        byte  $0d,"eine öffentliche Mitteilung an den aktuellen Kanal.",$0
+  strWin1     byte  "Chat",0
+  strWin2     byte  "State",0
+  strWin3     byte  "Input",0
+
+  strNoNetwork     byte 13,"Administra doesn't provide network functions!",13,"Please load admnet.",13,0
+  strInitWait      byte 13,"Initialiasing, please wait...",13,0
+  strRestartConf   byte "Please restart configuration (F2)",0
+  strAlreadyJoined byte "Already joined, please leave channel before with F5 (/part)",0
+  strUserChanged   byte "User changed, please reconnect to use it",0
+  strPassChanged   byte "Password changed, please reconnect to use it",0
+  strInputSrv      byte "IRC-Server (ip:port):",0
+  strErrorAddr     byte "Error in ip address or port of server.",0
+  strInputPass     byte "Password:",0
+  strInputNick     byte "Nickname:",0
+  strInputUser     byte "Username:",0
+  strInputChannel  byte "Channel:",0
+  strConfigSaved   byte "Configuration saved.",0
+  strConnect       byte "Connecting to IRC server...",0
+  strErrorNoSocket byte "No free socket.",0
+  strErrorConnect  byte "Error connecting to IRC server.",0
+  strWaitConnect   byte "Connected, waiting for readyness...",0
+  strDisconnect    byte "Disconnected from IRC server...",0
+  strErrorPassConn byte "Error setting password (no connection)",0
+  strSendPass      byte "Sending password...",0
+  strErrorSendPass byte "Error sending password",0
+  strErrorSendNick byte "Error sending nickname",0
+  strErrorRegConn  byte "No registration possible (no connection)",0
+  strSendNickReg   byte "Sending registration (nick, user, password)...",0
+  strErrorSendReg  byte "Error sending user information",0
+  strErrorSendJoin byte "Error joining to channel",0
+  strPingPong      byte "PING received, send PONG",0
+  strJoin          byte " has joined the channel",0
+  strPart          byte " has leaved the channel",0
+  strLeaveServer   byte " has leaved the server",0
+  strChangeNick    byte " is now known as ",0
+  strConnected     byte "Connected to ",0
+
+  '                  |------------------------------------------------------------|
+  strHelp byte      "Internal commands:"
+          byte  $0d,"================="
+          byte  $0d
+          byte  $0d,"F1        This Help"
+          byte  $0d,"F2  /set  Edit and save all settings"
+          byte  $0d,"F3        Connect to server, login and join"
+          byte  $0d,"F4  /join Join to channel (/join #<channel>)"
+          byte  $0d,"F5  /part Leave current channel (/part <message>)"
+          byte  $0d,"F6  /nick Change nickname (/nick <new nickname>)"
+          byte  $0d,"F7  /user Change username"
+          byte  $0d,"F8  /pass Change password"
+          byte  $0d,"F9  /quit Disconnect from server"
+          byte  $0d,"F10       Exit irc client"
+          byte  $0d,"    /msg  Private Message (/msg <recipient> <text>)"
+          byte  $0d,"    /srv  connect to server and login (srv <ip:port>)"
+          byte  $0d,"    /save Save settings"
+          byte  $0d,"Tab       Switch windows, scroll with cursor up/down"
+          byte  $0d
+          byte  $0d,"All other input beginning with '/' is a direct command to the"
+          byte  $0d,"server. All input that doesn't begin with '/' is a public"
+          byte  $0d,"message to the current channel",$0
+
+#else
+  'default locale: german
+
+  strConfFile byte  "irc.cfg",0
+
+  strWin1     byte  "Chat",0
+  strWin2     byte  "Status",0
+  strWin3     byte  "Eingabe",0
+
+  strNoNetwork     byte 13,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",13,"Bitte admnet laden.",13,0
+  strInitWait      byte 13,"Initialisiere, bitte warten...",13,0
+  strRestartConf   byte "Bitte Konfiguration neu starten (F2)",0
+  strAlreadyJoined byte "Kanal bereits betreten, vorher mit F5 (/part) verlassen",0
+  strUserChanged   byte "User geändert, zum Anwenden neu verbinden",0
+  strPassChanged   byte "Paßwort geändert, zum Anwenden neu verbinden",0
+  strInputSrv      byte "IRC-Server angeben (IP:Port):",0
+  strErrorAddr     byte "Fehlerhafte Eingabe von IP-Adresse und Port des Servers.",0
+  strInputPass     byte "Paßwort eingeben:",0
+  strInputNick     byte "Nickname eingeben:",0
+  strInputUser     byte "Username eingeben:",0
+  strInputChannel  byte "Channel eingeben:",0
+  strConfigSaved   byte "Konfiguration gespeichert.",0
+  strConnect       byte "Verbinde mit IRC-Server...",0
+  strErrorNoSocket byte "Kein Socket frei!",0
+  strErrorConnect  byte "Verbindung mit IRC-Server konnte nicht aufgebaut werden.",0
+  strWaitConnect   byte "Verbunden, warte auf Bereitschaft...",0
+  strDisconnect    byte "Verbindung mit IRC-Server getrennt...",0
+  strErrorPassConn byte "Kann Paßwort nicht setzen (keine Verbindung zum Server)",0
+  strSendPass      byte "Sende Paßwort...",0
+  strErrorSendPass byte "Fehler beim Senden des Paßwortes",0
+  strErrorSendNick byte "Fehler beim Senden des Nicknamens",0
+  strErrorRegConn  byte "Anmeldung nicht möglich (keine Verbindung zum Server)",0
+  strSendNickReg   byte "Sende Nickname und Benutzerinformationen...",0
+  strErrorSendReg  byte "Fehler beim Senden der Benutzerinformationen",0
+  strErrorSendJoin byte "Fehler beim Verbinden mit Channel",0
+  strPingPong      byte "PING erhalten, sende PONG",0
+  strJoin          byte " hat den Kanal betreten",0
+  strPart          byte " hat den Kanal verlassen",0
+  strLeaveServer   byte " hat den Server verlassen",0
+  strChangeNick    byte ":Nickname geändert in ",0
+  strConnected     byte "Verbunden mit ",0
+
+  '                  |------------------------------------------------------------|
+  strHelp byte      "Interne Befehle:"
+          byte  $0d,"================"
+          byte  $0d
+          byte  $0d,"F1        Diese Hilfe"
+          byte  $0d,"F2  /set  Alle Einstellungen bearbeiten und abspeichern"
+          byte  $0d,"F3        Mit Server verbinden, anmelden und Kanal betreten"
+          byte  $0d,"F4  /join Kanal betreten (/join #<Kanal>)"
+          byte  $0d,"F5  /part Aktuellen Kanal verlassen (/part <Mitteilung>)"
+          byte  $0d,"F6  /nick Nicknamen ändern (/nick <neuer Nick>)"
+          byte  $0d,"F7  /user Benutzernamen ändern"
+          byte  $0d,"F8  /pass Paßwort ändern"
+          byte  $0d,"F9  /quit Verbindung zu Server trennen"
+          byte  $0d,"F10       Programm beenden"
+          byte  $0d,"    /msg  Private Mitteilung (/msg <Empfänger> <Text>)"
+          byte  $0d,"    /srv  Mit Server verbinden und anmelden (srv <IP:Port>)"
+          byte  $0d,"    /save Einstellungen speichern"
+          byte  $0d,"Tab       Fenster umschalten, scrollen mit Cursor hoch/runter"
+          byte  $0d
+          byte  $0d,"Alle anderen mit '/' beginnenden Eingaben sind Befehle an den"
+          byte  $0d,"Server. Alle Eingaben, welche nicht mit '/' beginnen, sind"
+          byte  $0d,"eine öffentliche Mitteilung an den aktuellen Kanal.",$0
+#endif
 
 DAT                                                     'lizenz
 
