@@ -16,7 +16,7 @@ Version         : 00
 Subversion      : 01
 
 Funktion        : Diese Codeversion basiert auf admflash.spin und wird um einen LAN-Treiber erweitert.
-                  Die Soundfunktionen wurden aus Platzgründen entfernt.
+                  Die Soundfunktionen wurden aus Platzgründen beschränkt (kleiner HSS-Puffer, kein WAV).
 
                   Dieser Code wird von  Administra nach einem Reset aus dem EEProm in den hRAM kopiert
                   und gestartet. Im Gegensatz zu Bellatrix und Regnatix, die einen Loader aus dem EEProm
@@ -42,6 +42,11 @@ Funktion        : Diese Codeversion basiert auf admflash.spin und wird um einen 
                   - Verwaltung eines Systemordners
                   - Achtung: Keine Verwaltung von mehreren geöffneten Dateien!
 
+                  HSS-Funktionen:
+                  - 4-Kanal Tracker Engine
+                  - 2-Kanal Sound FX Synthesizer
+                  - 1-Kanal 1Bit ADPCM Sample Engine
+
                   RTC-Funktionen:
                   - Datum, Uhrzeit auslesen
                   - Datum, Uhrzeit schreiben
@@ -50,19 +55,21 @@ Funktion        : Diese Codeversion basiert auf admflash.spin und wird um einen 
                   - Wartefunktionen
 
                   LAN-Funktionen:
-                  - Ethernet-Port mit daten aus NVRAM initialisieren
+                  - Ethernet-Port mit Daten aus NVRAM oder SD-Dard initialisieren
                   - ein- und ausgehende Verbindungen öffnen
                   - Daten übertragen
 
-Komponenten     : FATEngine      01/18/2009 Kwabena W. Agyeman MIT Lizenz
+Komponenten     : HSS            1.2        Andrew Arsenault   Lizenz unklar
+                  FATEngine      01/18/2009 Kwabena W. Agyeman MIT Lizenz
                   RTCEngine      11/22/2009 Kwabena W. Agyeman MIT Lizenz
                   PropTCP        12/08/2009 Harrison Pham      MIT Lizenz
 
 COG's           : MANAGMENT     1 COG
                   FAT/RTC       1 COG
+                  HSS           2 COG's
                   NET           2 COG
                   -------------------
-                                4 COGs
+                                6 COGs
 
 Logbuch         :
 
@@ -139,7 +146,7 @@ _XINFREQ     = 5_000_000
 '             |  |  |  +- subversion (hinzufügungen)
 CHIP_VER  = $00_01_01_02
 
-CHIP_SPEC = gc#A_FAT|gc#A_LDR|gc#A_COM|gc#A_LAN
+CHIP_SPEC = gc#A_FAT|gc#A_LDR|gc#A_HSS|gc#A_COM|gc#A_LAN
 
 '
 '          hbeat   --------+
@@ -165,7 +172,7 @@ LED_OPEN     = gc#HBEAT                                 'led-pin für anzeige "d
 SD_BASE      = gc#A_SDD0                                'baspin cardreader
 CNT_HBEAT    = 5_000_0000                               'blinkgeschw. front-led
 
-MPLEN        = 12000                                    'größe des hss-musikpuffers
+MPLEN        = 3000                                     'größe des hss-musikpuffers
 
 'Netzwerk-Puffergrößen (müssen Vielfaches von 2 sein!)
 rxlen        = 2048
@@ -198,6 +205,7 @@ CON 'NVRAM Konstanten ----------------------------------------------------------
 
 OBJ
   sdfat           : "adm-fat"        'fatengine
+  hss             : "adm-hss"        'hydra-sound-system
   rtc             : "adm-rtc"        'RTC-Engine
   com             : "adm-com"        'serielle schnittstelle
   sock            : "driver_socket"  'LAN
@@ -213,6 +221,9 @@ VAR
   long  dmarker[6]                                      'speicher für dir-marker
   byte  tbuf[20]                                        'stringpuffer
   byte  tbuf2[20]
+  byte  sfxdat[16 * 32]                                 'sfx-slotpuffer
+  byte  fl_syssnd                                       '1 = systemtöne an
+  byte  st_sound                                        '0 = aus, 1 = hss
   long  com_baud
   byte  lan_started                                     'LAN gestartet?
   long  sockhandle[sock#sNumSockets]                    'Handle für mit sock.connect/sock.listen erstellten Socket
@@ -308,11 +319,27 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_lanIsConnected: lan_isconnected            'TRUE, wenn Socket verbunden, sonst FALSE
 
 '       ----------------------------------------------  CHIP-MANAGMENT
+        gc#a_mgrSetSound: mgr_setsound                  'soundsubsysteme verwalten
         gc#a_mgrGetSpec: mgr_getspec                    'spezifikation abfragen
+        gc#a_mgrSetSysSound: mgr_setsyssound            'systemsound ein/ausschalten
+        gc#a_mgrGetSoundSys: mgr_getsoundsys            'abfrage welches soundsystem aktiv ist
         gc#a_mgrALoad: mgr_aload                        'neuen code booten
         gc#a_mgrGetCogs: mgr_getcogs                    'freie cogs abfragen
         gc#a_mgrGetVer: mgr_getver                      'codeversion abfragen
         gc#a_mgrReboot: reboot                          'neu starten
+
+'       ----------------------------------------------  HSS-FUNKTIONEN
+        gc#a_hssLoad: hss_load                          'hss-datei in puffer laden (in admnet not supported)
+        gc#a_hssPlay:                                   'play (in admnet not supported)
+        gc#a_hssStop:                                   'stop (in admnet not supported)
+        gc#a_hssPause: hss.hmus_pause                   'pause
+        gc#a_hssPeek: hss_peek                          'register lesen
+        gc#a_hssIntReg: hss_intreg                      'interfaceregister auslesen
+        gc#a_hssVol: hss_vol                            'lautstärke setzen
+        gc#a_sfxFire: sfx_fire                          'sfx abspielen
+        gc#a_sfxSetSlot: sfx_setslot                    'sfx-slot setzen
+        gc#a_sfxKeyOff: sfx_keyoff
+        gc#a_sfxStop: sfx_stop
 
 '       ----------------------------------------------  DEBUG-FUNKTIONEN
         255: mgr_debug                                  'debugfunktion
@@ -326,6 +353,13 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
   'businterface initialisieren
   outa[gc#bus_hs] := 1                                  'handshake inaktiv             ,frida
   dira := db_in                                         'datenbus auf eingabe schalten ,frida
+
+  'grundzustand herstellen (hss aktiv + systemklänge an)
+
+  'hss starten
+  hss.start                                             'soundsystem starten
+  st_sound := 1                                         'hss aktiviert
+  fl_syssnd := 1                                        'systemsound an
 
   'sd-card starten
   clr_dmarker                                           'dir-marker löschen
@@ -376,6 +410,31 @@ PRI bus_getchar : zeichen                               'chip: ein byte über bu
   outa[gc#bus_hs] := 0                                  'daten quittieren
   outa[gc#bus_hs] := 1
   waitpeq(M3,M4,0)                                      'busclk=0?
+
+PRI sighigh(err)                                        'chip: schneller hbeat | fehlersound
+''funktionsgruppe               : chip
+''funktion                      : schneller hbeat | fehlersound
+''eingabe                       : -
+''ausgabe                       : -
+
+   if fl_syssnd == 1
+     if err == 0
+       hss.sfx_play(1, @SoundFX3)                       'Heartbeat High
+     else
+       hss.sfx_play(1, @SoundFX7)                       'Error
+
+PRI siglow(err)                                         'chip: langsamer hbeat | fehlersound
+''funktionsgruppe               : chip
+''funktion                      : langsamer hbeat | fehlersound
+''eingabe                       : -
+''ausgabe                       : -
+
+   if fl_syssnd == 1
+     if err == 0
+       hss.sfx_play(1, @SoundFX4)                       'Heartbeat High
+     else
+       hss.sfx_play(1, @SoundFX7)                       'Error
+
 
 PRI clr_dmarker| i                                      'chip: dmarker-tabelle löschen
 ''funktionsgruppe               : chip
@@ -469,6 +528,55 @@ PRI sub_getlong:wert                                    'sub: long empfangen
 
 CON ''------------------------------------------------- CHIP-MANAGMENT-FUNKTIONEN
 
+PRI mgr_setsound|sndstat                                'cmgr: soundsubsysteme verwalten
+''funktionsgruppe               : cmgr
+''funktion                      : soundsubsysteme an- bzw. abschalten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [150][get.funktion][put.sndstat]
+''                              : funktion - 0: hss-engine abschalten
+''                              :            1: hss-engine anschalten
+''                              : sndstat  - status/cognr startvorgang
+
+  sndstat := 0
+  case bus_getchar
+    0: if st_sound == 1
+         hss.hmus_stop
+         hss.sfx_stop(0)
+         hss.sfx_stop(1)
+         hss.stop
+         st_sound := 0
+
+    1: if st_sound == 0
+         sndstat := hss.start
+         st_sound := 1
+
+  bus_putchar(sndstat)
+
+PRI mgr_setsyssound                                     'cmgr: systemsound ein/ausschalten
+''funktionsgruppe               : cmgr
+''funktion                      : systemklänge steuern
+''eingabe                       :
+''ausgabe                       :
+''busprotokoll                  : [094][get.fl_syssnd]
+''                              : fl_syssnd - flag zur steuerung der systemsounds
+''                              :             0 - systemtöne aus
+''                              :             1 - systemtöne an
+
+  fl_syssnd := bus_getchar
+
+PRI mgr_getsoundsys                                     'cmgr: abfrage welches soundsystem aktiv ist
+''funktionsgruppe               : cmgr
+''funktion                      : abfrage welches soundsystem aktiv ist
+''eingabe                       :
+''ausgabe                       :
+''busprotokoll                  : [095][put.st_sound]
+''                              : st_sound - status des soundsystems
+''                              :            0 - sound aus
+''                              :            1 - hss
+
+  bus_putchar(st_sound)
+
 PRI mgr_aload | err                                     'cmgr: neuen administra-code booten
 ''funktionsgruppe               : cmgr
 ''funktion                      : administra mit neuem code booten
@@ -478,6 +586,7 @@ PRI mgr_aload | err                                     'cmgr: neuen administra-
 ''                              : fn  - dateiname des neuen administra-codes
   sub_getstr
   err := \sdfat.bootPartition(@tbuf, ".")
+  sighigh(err)                                          'fehleranzeige
 
 PRI mgr_getcogs: cogs |i,c,cog[8]                       'cmgr: abfragen wie viele cogs in benutzung sind
 ''funktionsgruppe               : cmgr
@@ -555,6 +664,7 @@ PRI sd_mount(mode) | err                                'sdcard: sd-card mounten
 
   ifnot sdfat.checkPartitionMounted                      'frida
     err := \sdfat.mountPartition(0,0)                     'karte mounten
+    siglow(err)
     'bus_putchar(err)                                      'fehlerstatus senden
     if mode == "M"                                         'frida
       bus_putchar(err)                                      'fehlerstatus senden
@@ -567,6 +677,7 @@ PRI sd_mount(mode) | err                                'sdcard: sd-card mounten
         dmarker[SMARKER] := sdfat.getDirCluster           'system-marker setzen
 
       sdfat.setDirCluster(dmarker[RMARKER])               'root-marker wieder aktivieren
+      hss.sfx_play(1, @SoundFX8)                          'on-sound
   else                                                    'frida
     bus_putchar(0)                                        'frida
 
@@ -578,6 +689,7 @@ PRI sd_opendir | err                                    'sdcard: verzeichnis öf
 ''busprotokoll                  : [002]
 
   err := \sdfat.listReset
+  siglow(err)
 
 PRI sd_nextfile | strpt                                 'sdcard: nächsten eintrag aus verzeichnis holen
 ''funktionsgruppe               : sdcard
@@ -610,8 +722,9 @@ PRI sd_open  | err,modus                                'sdcard: datei öffnen
    modus := bus_getchar                                 'modus empfangen
    sub_getstr
    err := \sdfat.openFile(@tbuf, modus)
+   sighigh(err)                                         'fehleranzeige
    bus_putchar(err)                                     'ergebnis der operation senden
-''   outa[LED_OPEN] := 1
+   outa[LED_OPEN] := 1
 
 PRI sd_close | err                                      'sdcard: datei schließen
 ''funktionsgruppe               : sdcard
@@ -622,8 +735,9 @@ PRI sd_close | err                                      'sdcard: datei schließe
 ''                              : error - fehlernummer entspr. list
 
   err  := \sdfat.closeFile
+  siglow(err)                                           'fehleranzeige
   bus_putchar(err)                                      'ergebnis der operation senden
-''  outa[LED_OPEN] := 0
+  outa[LED_OPEN] := 0
 
 PRI sd_getc | n                                         'sdcard: zeichen aus datei lesen
 ''funktionsgruppe               : sdcard
@@ -809,6 +923,7 @@ PRI sd_newfile | err                                    'sdcard: eine neue datei
 
    sub_getstr
    err := \sdfat.newFile(@tbuf)
+   sighigh(err)                                         'fehleranzeige
    bus_putchar(err)                                     'ergebnis der operation senden
 
 PRI sd_newdir | err                                     'sdcard: ein neues verzeichnis erzeugen
@@ -822,6 +937,7 @@ PRI sd_newdir | err                                     'sdcard: ein neues verze
 
    sub_getstr
    err := \sdfat.newDirectory(@tbuf)
+   sighigh(err)                                         'fehleranzeige
    bus_putchar(err)                                     'ergebnis der operation senden
 
 PRI sd_del | err                                        'sdcard: eine datei oder ein verzeichnis löschen
@@ -835,6 +951,7 @@ PRI sd_del | err                                        'sdcard: eine datei oder
 
    sub_getstr
    err := \sdfat.deleteEntry(@tbuf)
+   sighigh(err)                                         'fehleranzeige
    bus_putchar(err)                                     'ergebnis der operation senden
 
 PRI sd_rename | err                                     'sdcard: datei oder verzeichnis umbenennen
@@ -850,6 +967,7 @@ PRI sd_rename | err                                     'sdcard: datei oder verz
    sub_getstr                                           'fn1
    sub_getstr                                           'fn2
    err := \sdfat.renameEntry(@tbuf2,@tbuf)
+   sighigh(err)                                         'fehleranzeige
    bus_putchar(err)                                     'ergebnis der operation senden
 
 PRI sd_chattrib | err                                   'sdcard: attribute ändern
@@ -865,6 +983,7 @@ PRI sd_chattrib | err                                   'sdcard: attribute ände
   sub_getstr
   sub_getstr
   err := \sdfat.changeAttributes(@tbuf2,@tbuf)
+  siglow(err)                                           'fehleranzeige
   bus_putchar(err)                                      'ergebnis der operation senden
 
 PRI sd_chdir | err                                      'sdcard: verzeichnis wechseln
@@ -877,6 +996,7 @@ PRI sd_chdir | err                                      'sdcard: verzeichnis wec
 ''                              : error - fehlernummer entspr. list
   sub_getstr
   err := \sdfat.changeDirectory(@tbuf)
+  siglow(err)                                           'fehleranzeige
   bus_putchar(err)                                      'ergebnis der operation senden
 
 PRI sd_format | err                                     'sdcard: medium formatieren
@@ -890,6 +1010,7 @@ PRI sd_format | err                                     'sdcard: medium formatie
 
   sub_getstr
   err := \sdfat.formatPartition(0,@tbuf,0)
+  siglow(err)                                           'fehleranzeige
   bus_putchar(err)                                      'ergebnis der operation senden
 
 PRI sd_unmount | err                                    'sdcard: medium abmelden
@@ -901,9 +1022,11 @@ PRI sd_unmount | err                                    'sdcard: medium abmelden
 ''                              : error - fehlernummer entspr. list
 
   err := \sdfat.unmountPartition
+  siglow(err)                                           'fehleranzeige
   bus_putchar(err)                                      'ergebnis der operation senden
   ifnot err
     clr_dmarker
+  hss.sfx_play(1, @SoundFX9)                            'off-sound
 
 PRI sd_dmact|markernr                                   'sdcard: einen dir-marker aktivieren
 ''funktionsgruppe               : sdcard
@@ -997,6 +1120,179 @@ PRI com_rx                                              'com: zeichen empfangen
 ''busprotokoll                  : [033][put.char]
 
   bus_putchar(com.rx)
+
+CON ''------------------------------------------------- HSS-FUNKTIONEN
+
+PRI sfx_fire | slot, chan, slotadr                      'sfx: effekt im puffer abspielen
+''funktionsgruppe               : sfx
+''funktion                      : effekt aus einem effektpuffer abspielen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [107][get.slot][get.chan]
+''                              : slot - $00..$0f nummer der freien effektpuffer
+''                              : slot - $f0..ff vordefinierte effektslots
+''                              : chan - 0/1 stereokanal auf dem der effekt abgespielt werden soll
+''vordefinierte effekte         : &f0 - warnton
+''                              : $f1 - signalton
+''                              : $f2 - herzschlag schnell
+''                              : $f3 - herzschlag langsam
+''                              : $f4 - telefon
+''                              : $f5 - phaser :)
+''                              : $f6 - pling
+''                              : $f7 - on
+''                              : $f8 - off
+
+  slot := bus_getchar
+  chan := bus_getchar                                   'channelnummer lesen
+  case slot
+    $f0: hss.sfx_play(1, @SoundFX1)                     'warnton
+    $f1: hss.sfx_play(1, @SoundFX2)                     'signalton
+    $f2: hss.sfx_play(1, @SoundFX3)                     'herzschlag schnell
+    $f3: hss.sfx_play(1, @SoundFX4)                     'herzschlag schnell
+    $f4: hss.sfx_play(1, @SoundFX5)                     'telefon
+    $f5: hss.sfx_play(1, @SoundFX6)                     'phase
+    $f6: hss.sfx_play(1, @SoundFX7)                     'pling
+    $f7: hss.sfx_play(1, @SoundFX8)                     'on
+    $f8: hss.sfx_play(1, @SoundFX9)                     'off
+    other:
+      if slot < $f0
+         slotadr := @sfxdat + (slot * 32)               'slotnummer lesen und adresse berechnen
+         hss.sfx_play(chan, slotadr)
+
+PRI sfx_setslot | slotadr, i                            'sfx: daten in sfx-slotpuffer schreiben
+''funktionsgruppe               : sfx
+''funktion                      : die daten für ein sfx-slot werden werden von regnatix gesetzt
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [108][get.slot][32:get.daten]
+''                              : slot - $00..$0f nummer der freien effektpuffer
+''                              : daten - 32 byte effektdaten
+''
+''struktur der effektdaten:
+''
+''[wav ][len ][freq][vol ]      grundschwingung
+''[lfo ][lfw ][fma ][ama ]      modulation
+''[att ][dec ][sus ][rel ]      hüllkurve
+''[seq ]                        (optional)
+''
+''[wav]                         wellenform
+''  0 sinus (0..500hz)
+''  1 schneller sinus (0..1khz)
+''  2 dreieck (0..500hz)
+''  3 rechteck (0..1khz)
+''  4 schnelles rechteck (0..4khz)
+''  5 impulse (0..1,333hz)
+''  6 rauschen
+''[len]                         tonlänge $0..$fe, $ff endlos
+''[freq]                        frequenz $00..$ff
+''[vol]                         lautstärke $00..$0f
+''
+''[lfo]                         low frequency oscillator $ff..$01
+''[lfw]                         low frequency waveform
+''  $00 sinus (0..8hz)
+''  $01 fast sine (0..16hz)
+''  $02 ramp up (0..8hz)
+''  $03 ramp down (0..8hz)
+''  $04 square (0..32hz)
+''  $05 random
+''  $ff sequencer data          (es folgt eine sequenzfolge [seq])
+''[fma]                         frequency modulation amount
+''  $00 no modulation
+''  $01..$ff
+''[ama]                         amplitude modulation amount
+''  $00 no modulation
+''  $01..$ff
+''[att]                         attack $00..$ff
+''[dec]                         decay $00..$ff
+''[sus]                         sustain $00..$ff
+''[rel]                         release $00..$ff
+
+  slotadr := @sfxdat + (bus_getchar * 32)               'slotnummer lesen und adresse berechnen
+  repeat i from 0 to 31
+    byte[slotadr + i] := bus_getchar                    'sfx-daten einlesen
+
+PRI sfx_keyoff | chan                                   'sfx: release-phase einleiten um den effekt zu beenden
+''funktionsgruppe               : sfx
+''funktion                      : für den aktuell abgespielten effekt wird die release-phase der
+''                              : adsr-hüllkurve eingeleitet, um ihn zu beenden
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [109][get.chan]
+''                              : chan - 0/1 stereokanal auf dem der effekt abgespielt werden soll
+
+  chan := bus_getchar                                   'channelnummer lesen
+  hss.sfx_keyoff(chan)
+
+PRI sfx_stop | chan                                     'sfx: effekt sofort beenden
+''funktionsgruppe               : sfx
+''funktion                      : der aktuell abgespielte effekt wird sofort beendet
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [110][get.chan]
+''                              : chan - 0/1 stereokanal auf dem der effekt abgespielt werden soll
+
+  chan := bus_getchar                                   'channelnummer lesen
+  hss.sfx_stop(chan)
+
+PRI hss_vol                                             'hss: volume 0..15 einstellen
+''funktionsgruppe               : hss
+''funktion                      : lautstärke des hss-players wird eingestellt
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [106][get.vol]
+''                              : vol - 0..15 gesamtlautstärke des hss-players
+  hss.hmus_vol(bus_getchar)
+
+PRI hss_intreg | regnr,wert                             'hss: auslesen der player-register
+''funktionsgruppe               : hss
+''funktion                      : abfrage eines hss-playerregisters (16bit) durch regnatix
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [105][get.regnr][put.reghwt][put.regnwt]
+''                              : regnr - 0..24 (5 x 5 register)
+''                              : reghwt - höherwertiger teil des 16bit-registerwertes
+''                              : regnwt - niederwertiger teil des 16bit-registerwertes
+''
+''0     iEndFlag        iRowFlag        iEngineC        iBeatC  iRepeat         globale Playerwerte
+''5     iNote           iOktave         iVolume         iEffekt iInstrument     Soundkanal 1
+''10    iNote           iOktave         iVolume         iEffekt iInstrument     Soundkanal 2
+''15    iNote           iOktave         iVolume         iEffekt iInstrument     Soundkanal 3
+''20    iNote           iOktave         iVolume         iEffekt iInstrument     Soundkanal 4
+''
+''iEndFlag      Repeat oder Ende wurde erreicht
+''iRowFlag      Trackerzeile (Row) ist fertig
+''iEngineC      Patternzähler
+''iBeatC        Beatzähler (Anzahl der Rows)
+''iRepeat       Zähler für Loops
+
+   regnr := bus_getchar                                 'registernummer einlesen
+   wert := hss.intread(regnr)
+   bus_putchar(wert >> 8)                               '16-bit-wert senden hsb/lsb
+   bus_putchar(wert)
+
+PRI hss_peek                                            'hss: zugriff auf alle internen playerregister
+''funktionsgruppe               : hss
+''funktion                      : zugriff auf die internen playerregister; leider sind die register
+''                              : nicht dokumentiert; 48 long-register
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [104][get.regnr][sub_putlong.regwert]
+''                              : regnr   - registernummer
+''                              : regwert - long
+
+   sub_putlong(hss.peek(bus_getchar))
+
+PRI hss_load | err                                      'hss: musikdatei in puffer laden (dummy, in admnet not supported)
+''funktionsgruppe               : hss
+''funktion                      : hss-datei wird in den modulpuffer geladen (in admnet not supported)
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [100][sub_getstr.fn][put.err]
+''                              : fn  - dateiname
+''                              : err - fehlernummer entspr. liste
+
+   sub_getstr                                           'dateinamen einlesen
+   bus_putchar(0)                                       'ergebnis der operation senden
 
 CON ''------------------------------------------------- RTC-FUNKTIONEN
 
@@ -1400,6 +1696,58 @@ DAT                                                     'dummyroutine für getco
 '
 entry                   jmp     entry                   'just loops
 
+
+
+DAT                                                     'feste sfx-slots
+
+                               'Wav 'Len 'Fre 'Vol 'LFO 'LFW 'FMa 'AMa
+SoundFX1                byte    $01, $FF, $80, $0F, $0F, $00, $07, $90
+                                'Att 'Dec 'Sus 'Rel
+                        byte    $FF, $10, $00, $FF
+
+                                'Wav 'Len 'Fre 'Vol 'LFO 'LFW 'FMa 'AMa
+SoundFX2                byte    $05, $FF, $00, $0F, $04, $FF, $01, $05
+                                'Att 'Dec 'Sus 'Rel
+                        byte    $F1, $24, $00, $FF
+                                '16step Sequencer Table
+                        byte    $F1, $78, $3C, $00, $00, $00, $F1, $78, $3C, $00, $00, $00, $00, $00, $00, $00
+
+                                'Wav 'Len 'Fre 'Vol 'LFO 'LFW 'FMa 'AMa                                 'Heartbeat
+SoundFX3                byte    $00, $FF, $06, $0F, $09, $FF, $04, $05
+                                'Att 'Dec 'Sus 'Rel
+                        byte    $F1, $F4, $F0, $0F
+                        byte    $F1, $78, $3C, $00, $00, $00, $F1, $78, $3C, $00, $00, $00, $00, $00, $00, $00
+
+                                'Wav 'Len 'Fre 'Vol 'LFO 'LFW 'FMa 'AMa                                 'Heartbeat low
+SoundFX4                byte    $00, $FE, $06, $0f, $15, $FF, $04, $05
+                                'Att 'Dec 'Sus 'Rel
+                        byte    $F1, $F4, $F0, $0F
+                        byte    $F1, $78, $3C, $00, $00, $00, $F1, $78, $3C, $00, $00, $00, $00, $00, $00, $00
+
+                                'Wav 'Len 'Fre 'Vol 'LFO 'LFW 'FMa 'AMa                                 'Telefon
+SoundFX5                byte    $05, $15, $4F, $0F, $01, $04, $05, $00
+                                'Att 'Dec 'Sus 'Rel
+                        byte    $FF, $00, $00, $FF
+
+                                'Wav 'Len 'Fre 'Vol 'LFO 'LFW 'FMa 'AMa
+SoundFX6                byte    $06, $FF, $5F, $0F, $01, $03, $01, $00                                  'Teleport
+                                'Att 'Dec 'Sus 'Rel
+                        byte    $FF, $14, $00, $FF
+
+SoundFX7                                                                                                'pling
+'    Wav Len Fre Vol LFO LFW FMa AMa Att Dec Sus Rel
+byte $04,$01,$80,$0F,$00,$00,$00,$00,$FF,$00,$00,$80
+byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01
+
+SoundFX8                                                                                                'on
+'    Wav Len Fre Vol LFO LFW FMa AMa Att Dec Sus Rel
+byte $00,$05,$10,$0F,$08,$02,$05,$00,$FF,$00,$50,$11
+byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01
+
+SoundFX9                                                                                                'off
+'    Wav Len Fre Vol LFO LFW FMa AMa Att Dec Sus Rel
+byte $00,$05,$33,$0F,$05,$03,$10,$00,$FF,$00,$50,$11
+byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01
 
 
 {{

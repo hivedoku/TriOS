@@ -574,6 +574,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
                 sendStr(string(" :VERSION HiveIRC 1.0.0 [P8X32A/80MHz] <http://hive-project.de/>",13,10))
             else
               ledStart
+              ios.sfx_fire($f4, 1)                                             'play phone sound
               if byte[chanstr] == "#"                                         'Message an Channel
                 handleChatStr(chanstr, nickstr, msgstr, 0)
               else                                                            'Message an mich

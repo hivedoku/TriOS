@@ -39,7 +39,7 @@ CON
 ' ***************************************
 ' **     User Definable Settings       **
 ' ***************************************
-  sNumSockets     = 4           ' max number of concurrent registered sockets (max of 255)
+  sNumSockets     = 2           ' max number of concurrent registered sockets (max of 255)
 
 ' *** End of user definable settings, don't edit anything below this line!!!
 ' *** All IP/MAC settings are defined by calling the start(...) method
