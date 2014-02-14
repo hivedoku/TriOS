@@ -44,8 +44,6 @@ _XINFREQ     = 5_000_000
 
 CON
 
-LANMASK         = %00000000_00000000_00000000_00100000
-
 W0X_MENU        = 8
 W0Y_MENU        = 0
 
@@ -91,6 +89,7 @@ DAT
 VAR
 
   long  t1char                                'Empfangs-Zeitpunkt des 1. Zeichen einer Zeile
+  long  tsrvact                               'Zeitpunkt letzte Server-Aktivität
   long  ip_addr
   long  hiveid
   long  ledcog
@@ -113,6 +112,7 @@ VAR
   byte  send_str[LEN_IRCLINE]
   byte  receive_str[LEN_IRCLINE]
   byte  brightness
+  byte  newMsg
 
 PUB main | key
 
@@ -120,7 +120,9 @@ PUB main | key
 
   repeat
     if ios.keystat > 0
-      ledStop
+      if newMsg                        'neue Mitteilung wurde signalisiert
+        newMsg := FALSE
+        ledStop
       key := ios.key
       case key
         gc#KEY_TAB:     f_focus
@@ -140,6 +142,12 @@ PUB main | key
                           f_input(key)
 
     ifnot handleidx == $FF
+      if ((cnt - tsrvact) / clkfreq) > 60     'wenn seit dem Empfang der letzten Zeile vom Server mehr wie 60s vergangen sind
+        handleStatusStr(string("Timeout, sende PING"), 2, FALSE)
+        sendStr(string("PING HIVE"))
+        sendStr(str.trimCharacters(num.ToStr(hiveid, num#DEC)))
+        sendStr(string(13,10))
+        tsrvact := cnt                        'Zeitpunkt der letzten Serveraktivität setzen
       ircGetLine
 
 PRI init
@@ -158,17 +166,34 @@ PRI init
   ircsrv[0]       := 0
   focus           := 3
   joined          := FALSE
+  newMsg          := FALSE
 
   ios.start                                             'ios initialisieren
-  ifnot (ios.admgetspec & LANMASK)
-    ios.print(@strNoNetwork)
-    ios.stop
-  ios.print(@strInitWait)
+  ifnot (ios.belgetspec & (gc#b_key|gc#b_txt|gc#b_win)) 'Wir brauchen Bellatrix mit Keyboard-, Text- und Fensterfunktionen
+    ios.belreset                                        'Bellatrix neu starten (aus ROM laden)
+    ios.print(@strInitWait)
+    ifnot (ios.belgetspec & (gc#b_key|gc#b_txt|gc#b_win))
+      ios.print(@strWrongBel)                           'Bellatrix-Flash enthält nicht die nötige Version
+      ios.stop                                          'Ende
+  else
+    ios.print(@strInitWait)
+  ios.sdmount
+  ifnot (ios.admgetspec & gc#A_LAN)                     'Administra stellt kein Netzwerk zur Verfügung
+    ios.sddmset(ios#DM_USER)                            'u-marker setzen
+    ios.sddmact(ios#DM_SYSTEM)                          's-marker aktivieren
+    ios.admload(string("admnet.adm"))                   'versuche, admnet zu laden
+    ios.sddmact(ios#DM_USER)                            'u-marker aktivieren
+    ifnot (ios.admgetspec & gc#A_LAN)                   'wenn Laden fehlgeschlagen
+      ios.print(@strNoNetwork)
+      ios.stop                                          'Ende
   setscreen
   conf_load
   if ip_addr == 0
     ifnot f_setconf
       handleStatusStr(@strRestartConf, 2, FALSE)
+
+  'sfx-slots setzen
+  ios.sfx_setslot(@soundNewMgs, 0)
 
 PRI f_focus
 
@@ -547,6 +572,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
 
   if readLine(2000) 'vollständige Zeile empfangen
 
+    tsrvact := cnt                                                            'Zeitpunkt der letzten Serveraktivität setzen
     if receive_str[0] == ":"                                                  'Prefix folgt (sollte jede hereinkommende Message enthalten)
       prefixstr := @receive_str[1]
       ifnot (commandstr := str.replaceCharacter(prefixstr, " ", 0))           'nächstes Leerzeichen ist Ende des Prefix, dann folgt das Kommando
@@ -573,8 +599,10 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
                 sendStr(nickstr)
                 sendStr(string(" :VERSION HiveIRC 1.0.0 [P8X32A/80MHz] <http://hive-project.de/>",13,10))
             else
-              ledStart
-              ios.sfx_fire($f4, 1)                                             'play phone sound
+              ifnot newMsg                                                    'neue Mitteilung noch nicht signalisiert
+                newMsg := TRUE
+                ledStart
+                ios.sfx_fire($0, 1)                                           'play phone sound
               if byte[chanstr] == "#"                                         'Message an Channel
                 handleChatStr(chanstr, nickstr, msgstr, 0)
               else                                                            'Message an mich
@@ -1285,7 +1313,13 @@ PRI ledTwinkle(rate)
     repeat brightness from 100 to 0
       led.LEDBrightness(brightness,gc#HBEAT)   'Adjust LED brightness
       waitcnt(rate + cnt)                      'Wait a moment
-DAT ' Locale
+DAT 'Sound
+
+'                 Wav Len Fre Vol LFO LFW FMa AMa Att Dec Sus Rel
+soundNewMgs  byte $00,$03,$FF,$0F,$08,$04,$05,$00,$FF,$00,$50,$11
+             byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01
+
+DAT 'Locale
 
 #ifdef __LANG_EN
   'locale: english
@@ -1296,6 +1330,7 @@ DAT ' Locale
   strWin2     byte  "State",0
   strWin3     byte  "Input",0
 
+  strWrongBel      byte 13,"Bellatrix flash doesn't have the expected TriOS code.",13,0
   strNoNetwork     byte 13,"Administra doesn't provide network functions!",13,"Please load admnet.",13,0
   strInitWait      byte 13,"Initialiasing, please wait...",13,0
   strRestartConf   byte "Please restart configuration (F2)",0
@@ -1361,6 +1396,7 @@ DAT ' Locale
   strWin2     byte  "Status",0
   strWin3     byte  "Eingabe",0
 
+  strWrongBel      byte 13,"Bellatrix-Flash enthält nicht den erforderlichen TriOS-Code.",13,0
   strNoNetwork     byte 13,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",13,"Bitte admnet laden.",13,0
   strInitWait      byte 13,"Initialisiere, bitte warten...",13,0
   strRestartConf   byte "Bitte Konfiguration neu starten (F2)",0
