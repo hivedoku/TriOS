@@ -89,7 +89,7 @@ DAT
 VAR
 
   long  t1char                                'Empfangs-Zeitpunkt des 1. Zeichen einer Zeile
-  long  tsrvact                               'Zeitpunkt letzte Server-Aktivität
+  long  secsrvact                             'Sekunden seit letzter Server-Aktivität
   long  ip_addr
   long  hiveid
   long  ledcog
@@ -102,6 +102,7 @@ VAR
   word  sendpos
   byte  handleidx                             'Handle-Nummer IRC Verbindung
   byte  rows,cols,vidmod
+  byte  reconnect
   byte  joined
   byte  x0[4], y0[4], xn[4], yn[4], hy[4], buflinelen, focus
   byte  password[LEN_PASS+1],nickname[LEN_NICK+1],username[LEN_USER+1],channel[LEN_CHAN+1],ircsrv[LEN_IRCSRV+1]
@@ -114,7 +115,7 @@ VAR
   byte  brightness
   byte  newMsg
 
-PUB main | key
+PUB main | key, t
 
   init
 
@@ -141,14 +142,22 @@ PUB main | key
         other:          if focus == 3
                           f_input(key)
 
-    ifnot handleidx == $FF
-      if ((cnt - tsrvact) / clkfreq) > 60     'wenn seit dem Empfang der letzten Zeile vom Server mehr wie 60s vergangen sind
-        handleStatusStr(string("Timeout, sende PING"), 2, FALSE)
-        sendStr(string("PING HIVE"))
-        sendStr(str.trimCharacters(num.ToStr(hiveid, num#DEC)))
-        sendStr(string(13,10))
-        tsrvact := cnt                        'Zeitpunkt der letzten Serveraktivität setzen
+    ifnot handleidx == $FF                    'bei bestehender Verbindung...
+      if ((cnt - t) / clkfreq) > 1            'nach jeder Sekunde...
+        t := cnt
+        if secsrvact++ > 60                   'nach 60 Sekunden Inaktivität
+          sendStr(string("PING HIVE"))
+          sendStr(str.trimCharacters(num.ToStr(hiveid, num#DEC)))
+          sendStr(string(13,10))
+          secsrvact := 0                      'Sekunden seit letzter Serveraktivität zurücksetzen
       ircGetLine
+    elseif reconnect                          'wenn Verbindung unterbrochen wurde
+      if ((cnt - t) / clkfreq) > 1            'nach jeder Sekunde...
+        t := cnt
+        if secsrvact++ > 60                   'nach 60 Sekunden
+          handleStatusStr(@strReconnect, 2, TRUE)
+          f_connect
+          secsrvact := 0                      'Sekunden zurücksetzen
 
 PRI init
 
@@ -165,6 +174,7 @@ PRI init
   send_str[0]     := 0
   ircsrv[0]       := 0
   focus           := 3
+  reconnect       := FALSE
   joined          := FALSE
   newMsg          := FALSE
 
@@ -572,7 +582,7 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
 
   if readLine(2000) 'vollständige Zeile empfangen
 
-    tsrvact := cnt                                                            'Zeitpunkt der letzten Serveraktivität setzen
+    secsrvact := 0                                                            'Sekunden seit letzter Serveraktivität zurücksetzen
     if receive_str[0] == ":"                                                  'Prefix folgt (sollte jede hereinkommende Message enthalten)
       prefixstr := @receive_str[1]
       ifnot (commandstr := str.replaceCharacter(prefixstr, " ", 0))           'nächstes Leerzeichen ist Ende des Prefix, dann folgt das Kommando
@@ -646,8 +656,18 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
         temp_str[x] := 0
         handleStatusStr(@temp_str, 2, TRUE)
     elseif str.startsWithCharacters(commandstr, string("NOTICE "))            'Notiz
+#ifdef __DEBUG
+      handleStatusStr(commandstr, 2, FALSE)
+#endif
     elseif str.startsWithCharacters(commandstr, string("MODE "))              'Mode
-    elseif str.startsWithCharacters(commandstr, string("NICK "))             'Nick
+#ifdef __DEBUG
+      handleStatusStr(commandstr, 2, FALSE)
+#endif
+    elseif str.startsWithCharacters(commandstr, string("PONG "))              'PONG (Antwort auf eigenes PING)
+#ifdef __DEBUG
+      handleStatusStr(commandstr, 2, FALSE)
+#endif
+    elseif str.startsWithCharacters(commandstr, string("NICK "))              'Nick
       if (str.replaceCharacter(prefixstr, "!", 0))
         repeat x from 0 to strsize(prefixstr) - 1
           temp_str[x] := byte[prefixstr][x]
@@ -1257,6 +1277,7 @@ PRI readLine(timeout) : ch
 
   ifnot ios.lan_isConnected(handleidx)             'Verbindung unterbrochen
     ircClose
+    reconnect := TRUE                              'möglichst neu verbinden
     return(FALSE)
 
   if (readpos <> 0) and ((cnt - t1char) / (clkfreq / 1000) > timeout)     'Timeout seit Empfang 1. Zeichen
@@ -1333,6 +1354,7 @@ DAT 'Locale
   strWrongBel      byte 13,"Bellatrix flash doesn't have the expected TriOS code.",13,0
   strNoNetwork     byte 13,"Administra doesn't provide network functions!",13,"Please load admnet.",13,0
   strInitWait      byte 13,"Initialiasing, please wait...",13,0
+  strReconnect     byte "Try to reconnect",0
   strRestartConf   byte "Please restart configuration (F2)",0
   strAlreadyJoined byte "Already joined, please leave channel before with F5 (/part)",0
   strUserChanged   byte "User changed, please reconnect to use it",0
@@ -1399,6 +1421,7 @@ DAT 'Locale
   strWrongBel      byte 13,"Bellatrix-Flash enthält nicht den erforderlichen TriOS-Code.",13,0
   strNoNetwork     byte 13,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",13,"Bitte admnet laden.",13,0
   strInitWait      byte 13,"Initialisiere, bitte warten...",13,0
+  strReconnect     byte "Versuche Neuverbindung",0
   strRestartConf   byte "Bitte Konfiguration neu starten (F2)",0
   strAlreadyJoined byte "Kanal bereits betreten, vorher mit F5 (/part) verlassen",0
   strUserChanged   byte "User geändert, zum Anwenden neu verbinden",0
