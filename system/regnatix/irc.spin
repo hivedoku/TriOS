@@ -104,7 +104,7 @@ VAR
   byte  rows,cols,vidmod
   byte  reconnect
   byte  joined
-  byte  x0[4], y0[4], xn[4], yn[4], hy[4], buflinelen, focus
+  byte  x0[4], y0[4], xn[4], yn[4], buflinelen, focus
   byte  password[LEN_PASS+1],nickname[LEN_NICK+1],username[LEN_USER+1],channel[LEN_CHAN+1],ircsrv[LEN_IRCSRV+1]
   byte  input_str[64]
   byte  temp_str[256]
@@ -228,9 +228,8 @@ PRI f_scrollup | lineAddr, lineNum, lineMax
   case focus
     1: lineMax := MAX_LINES_WIN1
     2: lineMax := MAX_LINES_WIN2
-    3: lineMax := MAX_LINES_WIN3
 
-  if scrolllinenr[focus] > 0
+  if (scrolllinenr[focus] > 0) and (focus <> 3)
     ios.winset(focus)
     ios.scrollup
     ios.curpos1
@@ -248,9 +247,8 @@ PRI f_scrolldown | lineAddr, lineNum, lineMax
   case focus
     1: lineMax := MAX_LINES_WIN1
     2: lineMax := MAX_LINES_WIN2
-    3: lineMax := MAX_LINES_WIN3
 
-  if scrolllinenr[focus] < lineMax - yn[focus] + y0[focus] - 1
+  if (scrolllinenr[focus] < lineMax - yn[focus] + y0[focus] - 1) and (focus <> 3)
     ios.winset(focus)
     ios.scrolldown
     ios.curhome
@@ -346,21 +344,65 @@ PRI f_input(key)
   case key
     $0d:                if strsize(@send_str) > 0                          'Zeilenende, absenden
                           ircPutLine
-                          ios.winset(3)
-                          ios.printnl
                           sendpos := 0
                           send_str[0] := 0
-    ios#CHAR_BS:        if sendpos > 0                                     'backspace
+                          if yn[3]-y0[3] > 0                               'if changed, reset window sizes
+                            yn[1] := rows-9
+                            y0[2] := rows-7
+                            yn[2] := rows-4
+                            y0[3] := rows-2
+                            yn[3] := rows-2
+                            ios.windefine(1,x0[1],y0[1],xn[1],yn[1])
+                            ios.windefine(2,x0[2],y0[2],xn[2],yn[2])
+                            ios.windefine(3,x0[3],y0[3],xn[3],yn[3])
+                            win_redraw
+                            win_contentRefresh
                           ios.winset(3)
-                          ios.printbs
+                          ios.printcls
+    ios#CHAR_BS:        if sendpos > 0                                     'backspace
                           sendpos--
                           send_str[sendpos] := 0
-    9 .. 13, 32 .. 255: if sendpos < LEN_IRCLINE-2                         'normales zeichen
                           ios.winset(3)
-                          ios.printchar(key)
+                          if ios.curgetx == 1                              'cursor at the beginning of line
+                            if yn[1] < rows-9                              'chat window is smaller
+                              yn[1]++                                      'make chat window 1 line higher
+                              ios.windefine(1,x0[1],y0[1],xn[1],yn[1])
+                              y0[2]++
+                              yn[2]++                                      'move status window 1 line down
+                              ios.windefine(2,x0[2],y0[2],xn[2],yn[2])
+                            else
+                              yn[2]++                                      'make status window 1 line higher
+                              ios.windefine(2,x0[2],y0[2],xn[2],yn[2])
+                            y0[3]++                                        'make input window 1 line smaller
+                            ios.windefine(3,x0[3],y0[3],xn[3],yn[3])
+                            win_redraw
+                            win_contentRefresh
+                          else
+                            ios.winset(3)
+                            ios.printbs
+    9 .. 13, 32 .. 255: if sendpos < LEN_IRCLINE-2                         'normales zeichen
                           send_str[sendpos] := key
                           sendpos++
                           send_str[sendpos] := 0
+                          if ios.curgetx == cols - 2                       'cursor at line end
+                            if yn[2]-y0[2] > 0                             'status window has more than 1 line
+                              yn[2]--                                      'make status window 1 line smaller
+                              ios.windefine(2,x0[2],y0[2],xn[2],yn[2])
+                            else
+                              yn[1]--                                      'make chat window 1 line smaller
+                              ios.windefine(1,x0[1],y0[1],xn[1],yn[1])
+                              y0[2]--
+                              yn[2]--                                      'move status window 1 line up
+                              ios.windefine(2,x0[2],y0[2],xn[2],yn[2])
+                            y0[3]--                                        'make input window 1 line higher
+                            ios.windefine(3,x0[3],y0[3],xn[3],yn[3])
+                            win_redraw
+                            win_contentRefresh
+                          elseif (ios.curgetx == 1) and yn[3]-y0[3] > 0    'first char in next line
+                            win_contentRefresh                             'word wrap
+                          else
+                            ios.winset(3)
+                            ios.printchar(key)
 
 PRI confServer
 
@@ -773,30 +815,44 @@ PRI ircPutLine | i
         win_contentRefresh
       ircJoin
   elseif str.startsWithCharacters(@send_str, string("/part")) 'Channel verlassen
-    if send_str[5] == " "                                     'Mitteilung folgt
-      ircPart(@send_str[5])                                   'Mitteilung mit Leerzeichen an erster Stelle
+    if handleidx == $FF
+      handleStatusStr(@strNotConnected, 2, FALSE)
     else
-      ircPart(0)
-    handleChatStr(@channel, @nickname, @send_str, 1)
+      if send_str[5] == " "                                   'Mitteilung folgt
+        ircPart(@send_str[5])                                 'Mitteilung mit Leerzeichen an erster Stelle
+      else
+        ircPart(0)
+      handleChatStr(@channel, @nickname, @send_str, 1)
   elseif str.startsWithCharacters(@send_str, string("/msg"))  'Message an Nickname
-    sendStr(string("PRIVMSG "))
-    if (i := str.replaceCharacter(@send_str[5], " ", 0))
-      sendStr(@send_str[5])
-      sendStr(string(" :"))
-      sendStr(i)
-      sendStr(string(13,10))
-      handleChatStr(@send_str[5], @nickname, i, 1)
+    if handleidx == $FF
+      handleStatusStr(@strNotConnected, 2, FALSE)
+    else
+      sendStr(string("PRIVMSG "))
+      if (i := str.replaceCharacter(@send_str[5], " ", 0))
+        sendStr(@send_str[5])
+        sendStr(string(" :"))
+        sendStr(i)
+        sendStr(string(13,10))
+        handleChatStr(@send_str[5], @nickname, i, 1)
   elseif send_str[0] == "/"                                   'anderes IRC-Kommando an Server
-    sendStr(@send_str[1])
-    sendStr(string(13,10))
-    handleChatStr(@channel, @nickname, @send_str, 1)
+    if handleidx == $FF
+      handleStatusStr(@strNotConnected, 2, FALSE)
+    else
+      sendStr(@send_str[1])
+      sendStr(string(13,10))
+      handleChatStr(@channel, @nickname, @send_str, 1)
   else                                                        'Message an Channel
-    sendStr(string("PRIVMSG "))
-    sendStr(@channel)
-    sendStr(string(" :"))
-    sendStr(@send_str)
-    sendStr(string(13,10))
-    handleChatStr(@channel, @nickname, @send_str, 1)
+    if strsize(@channel) == 0
+      handleStatusStr(@strNotJoined, 2, FALSE)
+    elseif handleidx == $FF
+      handleStatusStr(@strNotConnected, 2, FALSE)
+    else
+      sendStr(string("PRIVMSG "))
+      sendStr(@channel)
+      sendStr(string(" :"))
+      sendStr(@send_str)
+      sendStr(string(13,10))
+      handleChatStr(@channel, @nickname, @send_str, 1)
 
 PRI title_draw | spaces, i
 
@@ -842,7 +898,7 @@ PRI win_draw | i
     ios.winoframe
     ios.winset(0)
     ios.cursetx(2)
-    ios.cursety(hy[i])
+    ios.cursety(y0[i]-1)
     if i == focus
       ios.setcolor(COL_FOCUS)
     else
@@ -866,7 +922,7 @@ PRI win_redraw | i
     ios.winoframe
     ios.winset(0)
     ios.cursetx(2)
-    ios.cursety(hy[i])
+    ios.cursety(y0[i]-1)
     if i == focus
       ios.setcolor(COL_FOCUS)
     else
@@ -876,11 +932,12 @@ PRI win_redraw | i
       2: ios.print(@strWin2)
       3: ios.print(@strWin3)
 
-PRI win_contentRefresh | win, lines, lineNum
+PRI win_contentRefresh | win, lines, lineNum, linePos, space, i
 '' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 '' │ Fensterinhalt neu aufbauen                                                                                               │
 '' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
+  'chat and status window
   repeat win from 1 to 2
     lines := yn[win] - y0[win] + 1  '???
     if buflinenr[win] => lines
@@ -898,6 +955,31 @@ PRI win_contentRefresh | win, lines, lineNum
         lineNum := 0
       ios.printnl
       printBufWin(bufstart[win] + (lineNum * buflinelen))
+
+  'input window
+  ios.winset(3)
+  ios.curoff
+  ios.printcls
+  ios.setcolor(COL_FOCUS)
+  if strsize(@send_str) < cols - 1
+    ios.print(@send_str)
+  else
+    linePos := 0
+    space := 0
+    repeat i from 0 to strsize(@send_str) - 1
+      if send_str[i] == " "
+        space := i                                               'save position of last space
+      if (i - linePos == cols - 2)                               'end of current line
+        repeat while linePos < i
+          ios.printchar(send_str[linePos++])                     'print line
+          if linePos == space                                    'last space
+            linePos++                                            'omit
+            quit                                                 'next line
+        ios.curpos1
+        ios.printnl
+        space := 0
+    ios.print(@send_str[linePos])                                'print remaining line
+  ios.curon
 
 PRI setscreen | buflen[4], i
 
@@ -921,7 +1003,6 @@ PRI setscreen | buflen[4], i
   y0[1] := 2
   xn[1] := cols-2
   yn[1] := rows-9
-  hy[1] := 1
   buflinenr[1]    := 0
   scrolllinenr[1] := 0
   bufstart[1]     := 0
@@ -934,7 +1015,6 @@ PRI setscreen | buflen[4], i
   y0[2] := rows-7
   xn[2] := cols-2
   yn[2] := rows-4
-  hy[2] := rows-8
   buflinenr[2]    := 0
   scrolllinenr[2] := 0
   bufstart[2]     := bufstart[1] + buflen[1]
@@ -947,7 +1027,6 @@ PRI setscreen | buflen[4], i
   y0[3] := rows-2
   xn[3] := cols-2
   yn[3] := rows-2
-  hy[3] := rows-3
   buflinenr[3]    := 0
   scrolllinenr[3] := 0
   bufstart[3]     := bufstart[2] + buflen[2]
@@ -1385,6 +1464,8 @@ DAT 'Locale
   strLeaveServer   byte " has leaved the server",0
   strChangeNick    byte " is now known as ",0
   strConnected     byte "Connected to ",0
+  strNotConnected  byte "Not connected",0
+  strNotJoined     byte "Not joined to channel",0
 
   '                  |------------------------------------------------------------|
   strHelp byte      "Internal commands:"
@@ -1452,6 +1533,8 @@ DAT 'Locale
   strLeaveServer   byte " hat den Server verlassen",0
   strChangeNick    byte ":Nickname geändert in ",0
   strConnected     byte "Verbunden mit ",0
+  strNotConnected  byte "Nicht verbunden",0
+  strNotJoined     byte "Mit keinem Kanal verbunden",0
 
   '                  |------------------------------------------------------------|
   strHelp byte      "Interne Befehle:"
