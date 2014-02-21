@@ -34,13 +34,12 @@ OBJ
         ios: "reg-ios"
         str: "glob-string"
         num: "glob-numbers"
+        gc : "glob-con"
 
 CON
 
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
-
- LANMASK     = %00000000_00000000_00000000_00100000
 
 CON 'NVRAM Konstanten --------------------------------------------------------------------------
 
@@ -65,9 +64,14 @@ PUB main | i
   ios.start                                             'ios initialisieren
   ios.printnl
 
-  ifnot (ios.admgetspec & LANMASK)
-    ios.print(@strNoNetwork)
-    ios.stop
+  ifnot (ios.admgetspec & gc#A_LAN)
+    ios.sddmset(ios#DM_USER)                            'u-marker setzen
+    ios.sddmact(ios#DM_SYSTEM)                          's-marker aktivieren
+    ios.admload(string("admnet.adm"))                   'versuche, admnet zu laden
+    ios.sddmact(ios#DM_USER)                            'u-marker aktivieren
+    ifnot (ios.admgetspec & gc#A_LAN)                   'wenn Laden fehlgeschlagen
+      ios.print(@strNoNetwork)
+      ios.stop                                          'Ende
   if ios.rtcTest                                        'RTC chip available?
     rtcAvailable := TRUE
   else                                                  'use configfile

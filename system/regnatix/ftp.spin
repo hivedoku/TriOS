@@ -36,13 +36,12 @@ OBJ
         ios: "reg-ios"
         str: "glob-string"
         num: "glob-numbers"        'Number Engine
+        gc : "glob-con"
 
 CON
 
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
-
- LANMASK     = %00000000_00000000_00000000_00100000
 
 CON 'NVRAM Konstanten --------------------------------------------------------------------------
 
@@ -81,9 +80,14 @@ PUB main
   password[0] := 0
 
   ios.start
-  ifnot (ios.admgetspec & LANMASK)
-    ios.print(@strNoNetwork)
-    ios.stop
+  ifnot (ios.admgetspec & gc#A_LAN)
+    ios.sddmset(ios#DM_USER)                            'u-marker setzen
+    ios.sddmact(ios#DM_SYSTEM)                          's-marker aktivieren
+    ios.admload(string("admnet.adm"))                   'versuche, admnet zu laden
+    ios.sddmact(ios#DM_USER)                            'u-marker aktivieren
+    ifnot (ios.admgetspec & gc#A_LAN)                   'wenn Laden fehlgeschlagen
+      ios.print(@strNoNetwork)
+      ios.stop                                          'Ende
   ios.printnl
   ios.parastart                                         'parameterübergabe starten
   repeat while ios.paranext(@parastr)                   'parameter einlesen
@@ -98,6 +102,8 @@ PUB main
         "p": ios.paranext(@password)
         "s": save2card := TRUE
         other: ios.print(@help)
+    else
+      ByteMove(@filename, @parastr, strsize(@parastr))
 
   ifnot byte[@filename][0] == 0
     ifnot ftpconnect
@@ -358,7 +364,7 @@ PRI writeToSDCard | fnr, len, i
   fnr := ios.rd_open(@filename)
   ifnot fnr == -1
     len := ios.rd_len(fnr)
-    ios.sddel(@filename)                                   'falls alte Datei auf SD-Card vorhanden, diese löschen
+    ios.sddel(@filename)                                'falls alte Datei auf SD-Card vorhanden, diese löschen
     ifnot ios.sdnewfile(@filename)
       ifnot ios.sdopen("W",@filename)
         i := 0
@@ -456,17 +462,17 @@ DAT ' Locale
   strErrorRetrOK   byte "Ftp server doesn't acknowledge sending of file (226).",13,0
   strWrite2SD      byte "Saving to sd card...",13,0
 
-  help             byte  "/?            : Help",13
-                   byte  "/h <a.b.c.d>  : host ip address (ftp server)",13
-                   byte  "                (default: boot server from ipconfig)",13
-                   byte  "/d <directory>: change to remote directory",13
-                   byte  "                (default: /hive/sdcard/system)",13
-                   byte  "/f <filename> : download <filename>",13
-                   byte  "/u <username> : Username at ftp server",13
-                   byte  "                (default: anonymous)",13
-                   byte  "/p <password> : password at ftp server",13
-                   byte  "                (default: anonymous@hive<hive id>)",13
-                   byte  "/s            : save file to sd card",13
+  help             byte  " /?             : Help",13
+                   byte  " /h  <a.b.c.d>  : host ip address (ftp server)",13
+                   byte  "                  (default: boot server from ipconfig)",13
+                   byte  " /d  <directory>: change to remote directory",13
+                   byte  "                  (default: /hive/sdcard/system)",13
+                   byte  "[/f] <filename> : download <filename>",13
+                   byte  " /u  <username> : Username at ftp server",13
+                   byte  "                  (default: anonymous)",13
+                   byte  " /p  <password> : password at ftp server",13
+                   byte  "                  (default: anonymous@hive<hive id>)",13
+                   byte  " /s             : save file to sd card",13
                    byte  0
 
 #else
@@ -504,17 +510,17 @@ DAT ' Locale
   strErrorRetrOK   byte "FTP-Server hat den Empfang durch den Client nicht bestätigt (226).",13,0
   strWrite2SD      byte "Speichere auf SD-Card...",13,0
 
-  help             byte  "/?              : Hilfe",13
-                   byte  "/h <a.b.c.d>    : FTP-Server-Adresse (Host)",13
-                   byte  "                  (default: mit ipconfig gesetzter Boot-Server)",13
-                   byte  "/d <verzeichnis>: in entferntes Verzeichnis wechseln",13
-                   byte  "                  (default: /hive/sdcard/system)",13
-                   byte  "/f <dateiname>  : Download <dateiname>",13
-                   byte  "/u <username>   : Benutzername am FTP-Server",13
-                   byte  "                  (default: anonymous)",13
-                   byte  "/p <password>   : Paßwort am FTP-Server",13
-                   byte  "                  (default: anonymous@hive<Hive-Id>)",13
-                   byte  "/s              : Datei auf SD-Card speichern",13
+  help             byte  " /?               : Hilfe",13
+                   byte  " /h  <a.b.c.d>    : FTP-Server-Adresse (Host)",13
+                   byte  "                   (default: mit ipconfig gesetzter Boot-Server)",13
+                   byte  " /d  <verzeichnis>: in entferntes Verzeichnis wechseln",13
+                   byte  "                   (default: /hive/sdcard/system)",13
+                   byte  "[/f] <dateiname>  : Download <dateiname>",13
+                   byte  " /u  <username>   : Benutzername am FTP-Server",13
+                   byte  "                   (default: anonymous)",13
+                   byte  " /p  <password>   : Paßwort am FTP-Server",13
+                   byte  "                   (default: anonymous@hive<Hive-Id>)",13
+                   byte  " /s               : Datei auf SD-Card speichern",13
                    byte  0
 #endif
 

@@ -30,6 +30,10 @@ Notizen         :
 
 }}
 
+DAT
+
+  strVersion     byte  "1.3.1",0
+
 OBJ
         ios: "reg-ios"
         str: "glob-string"
@@ -44,34 +48,33 @@ _XINFREQ     = 5_000_000
 
 CON
 
-W0X_MENU        = 8
-W0Y_MENU        = 0
+  W0X_MENU        = 8
+  W0Y_MENU        = 0
 
-COL_DEFAULT     = 0    'default Schriftfarbe (Mitteilungstext und Eingabe)
-COL_STDEFAULT   = 0    'default Schriftfarbe im Statusfenster
-COL_FRAME       = 0    'Fensterrahmen (nicht ausgewählt)
-COL_FOCUS       = 3    'Fensterrahmen (ausgewählt/Fokus)
-COL_HEAD        = 8    'Titelzeile
-COL_TIME        = 8    'aktuelle Zeit in Message-Zeile
-COL_STTIME      = 8    'aktuelle Zeit im Status-Fenster
-COL_CHAN        = 5    'Channel in Message-Zeile
-COL_NICK        = 4    'Nickname in Message-Zeile
-COL_MYNICK      = 2    'Nickname in selbst geschriebener Message-Zeile
-COL_PRIVNICK    = 7    'Nickname in privater Message-Zeile
-COL_MSG         = 0    'Text der Message-Zeile
-COL_MYMSG       = 6    'Text in selbst geschriebener Message-Zeile
-COL_PRIVMSG     = 7    'Text in privater Message-Zeile
+  COL_DEFAULT     = 0    'default Schriftfarbe (Mitteilungstext und Eingabe)
+  COL_STDEFAULT   = 0    'default Schriftfarbe im Statusfenster
+  COL_FRAME       = 0    'Fensterrahmen (nicht ausgewählt)
+  COL_FOCUS       = 3    'Fensterrahmen (ausgewählt/Fokus)
+  COL_HEAD        = 8    'Titelzeile
+  COL_TIME        = 8    'aktuelle Zeit in Message-Zeile
+  COL_STTIME      = 8    'aktuelle Zeit im Status-Fenster
+  COL_CHAN        = 5    'Channel in Message-Zeile
+  COL_NICK        = 4    'Nickname in Message-Zeile
+  COL_MYNICK      = 2    'Nickname in selbst geschriebener Message-Zeile
+  COL_PRIVNICK    = 7    'Nickname in privater Message-Zeile
+  COL_MSG         = 0    'Text der Message-Zeile
+  COL_MYMSG       = 6    'Text in selbst geschriebener Message-Zeile
+  COL_PRIVMSG     = 7    'Text in privater Message-Zeile
 
-LEN_PASS        = 32
-LEN_NICK        = 32
-LEN_USER        = 32
-LEN_CHAN        = 32
-LEN_IRCLINE     = 512
-LEN_IRCSRV      = 64
+  LEN_PASS        = 32
+  LEN_NICK        = 32
+  LEN_USER        = 32
+  LEN_CHAN        = 32
+  LEN_IRCLINE     = 512
+  LEN_IRCSRV      = 64
 
-MAX_LINES_WIN1  = 1000  ' maximale Zeilenanzahl im Puffer für Fenster 1 (Chat)
-MAX_LINES_WIN2  = 1000  ' maximale Zeilenanzahl im Puffer für Fenster 2 (Status)
-MAX_LINES_WIN3  = 100   ' maximale Zeilenanzahl im Puffer für Fenster 3 (Eingabe)
+  MAX_LINES_WIN1  = 1000  ' maximale Zeilenanzahl im Puffer für Fenster 1 (Chat)
+  MAX_LINES_WIN2  = 1000  ' maximale Zeilenanzahl im Puffer für Fenster 2 (Status)
 
 CON 'NVRAM Konstanten --------------------------------------------------------------------------
 
@@ -114,6 +117,7 @@ VAR
   byte  receive_str[LEN_IRCLINE]
   byte  brightness
   byte  newMsg
+  byte  nooutput
 
 PUB main | key, t
 
@@ -177,6 +181,7 @@ PRI init
   reconnect       := FALSE
   joined          := FALSE
   newMsg          := FALSE
+  nooutput        := FALSE
 
   ios.start                                             'ios initialisieren
   ifnot (ios.belgetspec & (gc#b_key|gc#b_txt|gc#b_win)) 'Wir brauchen Bellatrix mit Keyboard-, Text- und Fensterfunktionen
@@ -262,6 +267,7 @@ PRI f_scrolldown | lineAddr, lineNum, lineMax
 
 PRI f_help
 
+  nooutput := TRUE                'solange Hilfe angezeigt wird, nichts ausgeben
   ios.winset(5)
   ios.printcls
   ios.winoframe
@@ -269,9 +275,11 @@ PRI f_help
   ios.curoff
   ios.setcolor(COL_DEFAULT)
   ios.print(@strHelp)
-  repeat until ios.keystat > 0
-    waitcnt(cnt + clkfreq)        '1sek warten
-  ios.key
+  repeat until ios.keystat > 0     'bis eine Taste gedrückt wird
+    ifnot handleidx == $FF         'bei bestehender Verbindung...
+      ircGetLine                   'Meldungen vom Server empfangen
+  ios.key                          'Taste "abholen" (dummy)
+  nooutput := FALSE                'Ausgabe wieder freigeben
   win_redraw
   win_contentRefresh
 
@@ -649,7 +657,9 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
               if strcomp(msgstr, string("VERSION"))                           'Versions-Anfrage
                 sendStr(string("NOTICE "))
                 sendStr(nickstr)
-                sendStr(string(" :VERSION HiveIRC 1.0.0 [P8X32A/80MHz] <http://hive-project.de/>",13,10))
+                sendStr(string(" :VERSION HiveIRC "))
+                sendStr(@strVersion)
+                sendStr(string(" [P8X32A/80MHz] <http://hive-project.de/>",13,10))
             else
               ifnot newMsg                                                    'neue Mitteilung noch nicht signalisiert
                 newMsg := TRUE
@@ -880,6 +890,12 @@ PRI title_draw | spaces, i
         if ircsrv[++i] == 0      'Ende Servername folgt
           ios.printchar(")")
   else
+    ios.print(string(" v"))
+    spaces -= 2
+    ios.print(@strVersion)
+    spaces -= strsize(@strVersion)
+    ios.print(string(" © Jörg Deckert"))
+    spaces -= 15
     repeat spaces
       ios.printchar(" ")
   ios.printlogo(0,0)
@@ -1029,10 +1045,6 @@ PRI setscreen | buflen[4], i
   yn[3] := rows-2
   buflinenr[3]    := 0
   scrolllinenr[3] := 0
-  bufstart[3]     := bufstart[2] + buflen[2]
-  buflen[3]       := buflinelen * MAX_LINES_WIN3
-  repeat i from 0 to MAX_LINES_WIN3 - 1             'Fensterpuffer leeren
-    printStrBuf(3)
 
   ios.winset(0)
   ios.printcls
@@ -1206,6 +1218,9 @@ PRI printStrWin(printStr) | i
 '' │ Chat-Zeile in aktuellem Fenster zeigen                                                                                   │
 '' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
+  if nooutput                                              'wenn Ausgabe gesterrt
+    return
+
   i := 0
   repeat
     if byte[printStr][i] == 0 and byte[printStr][i+1] == 0 'nichts mehr anzuzeigen, Ende
@@ -1225,7 +1240,6 @@ PRI printStrBuf(win) | lineAddr, lineMax, i
   case win
     1: lineMax := MAX_LINES_WIN1
     2: lineMax := MAX_LINES_WIN2
-    3: lineMax := MAX_LINES_WIN3
 
   lineAddr := bufstart[win] + (buflinenr[win]++ * buflinelen)     'Adresse Zeilenbeginn im eRAM (Usermode)
   if buflinenr[win] == lineMax
@@ -1299,6 +1313,7 @@ PRI IpPortToStr(ip, port) | i,n,x,stradr
 
 PUB input(strdesc, strdef, input_len) | i,n
 
+  nooutput := TRUE                                      'solange Dialog angezeigt wird, nichts ausgeben
   input_str[0] := 0
   ios.winset(4)
   ios.printcls
@@ -1323,21 +1338,25 @@ PUB input(strdesc, strdef, input_len) | i,n
     i++
   byte[@input_str][i] := 0
   ios.curon
-  repeat                                                'entspricht ab hier ios.input
-    n := ios.keywait                                    'auf taste warten
-    case n
-      $0d:                quit                          'Enter, Eingabe beenden
-      ios#CHAR_BS:        if i > 0                      'Zurück
-                            ios.printbs
-                            i--
-                            byte[@input_str][i] := 0
-      9 .. 13, 32 .. 255: if i < input_len              'normales zeichen
-                            ios.printchar(n)
-                            byte[@input_str][i] := n
-                            i++
-                            byte[@input_str][i] := 0
+  repeat
+    ifnot handleidx == $FF                              'bei bestehender Verbindung...
+      ircGetLine                                        'Meldungen vom Server empfangen
+    if ios.keystat > 0                                  'wenn Taste gedrückt
+      n := ios.key
+      case n
+        $0d:                quit                        'Enter, Eingabe beenden
+        ios#CHAR_BS:        if i > 0                    'Zurück
+                              ios.printbs
+                              i--
+                              byte[@input_str][i] := 0
+        9 .. 13, 32 .. 255: if i < input_len            'normales zeichen
+                              ios.printchar(n)
+                              byte[@input_str][i] := n
+                              i++
+                              byte[@input_str][i] := 0
 
   ios.curoff
+  nooutput := FALSE                                     'Ausgabe wieder freigeben
 
 PRI readLine(timeout) : ch
 
