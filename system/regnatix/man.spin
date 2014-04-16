@@ -39,9 +39,10 @@ CON
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
 
-PUB main | i,n,len
+PUB main | i,n,len,ch,lch
 
   n := 1
+  lch := 0
   ios.start
   ios.parastart
   ios.paranext(@parastr)
@@ -56,13 +57,22 @@ PUB main | i,n,len
   byte[@parastr][len + i] := 0
   ifnot ios.sdopen("r",@parastr)
     repeat                                              'text ausgeben
-      if ios.printchar(ios.sdgetc) == ios#CHAR_NL       'zeilenzahl zählen und stop
-        if ++n == (rows - 2)
-          n := 1
-          if ios.keywait == "q"
-            ios.sdclose
-            ios.sddmact(ios#DM_USER)                    'u-marker aktivieren
-            ios.stop
+      ch := ios.sdgetc
+      if ch == ios#CHAR_NL OR ch == $0a                 'CR or NL
+        if ch == lch OR (lch <> ios#CHAR_NL AND lch <> $0a)
+          ios.printnl
+          lch := ch
+          if ++n == (rows - 2)
+            n := 1
+            if ios.keywait == "q"
+              ios.sdclose
+              ios.sddmact(ios#DM_USER)                  'u-marker aktivieren
+              ios.stop
+        else
+          lch := 0
+      else
+        ios.printchar(ch)
+        lch := ch
     until ios.sdeof                                     'ausgabe bis eof
   else
     'ios.print(string("Hilfetexte : ",$0d))

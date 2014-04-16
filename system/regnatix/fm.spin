@@ -348,7 +348,7 @@ dlbox[w_sel].setview(w_view[1])
 info_print
 
 
-PRI f_view | n,stradr
+PRI f_view | n,stradr,ch,lch
 
   ios.winset(3)
   ios.curoff
@@ -356,17 +356,27 @@ PRI f_view | n,stradr
 
   stradr := get_fname(w_view[w_sel] + w_pos[w_sel])
   n := 1
+  lch := 0
   ifnot ios.os_error(ios.sdopen("r",stradr))            'datei öffnen
     repeat                                              'text ausgeben
-      if ios.printchar(ios.sdgetc) == ios#CHAR_NL      'zeilenzahl zählen und stop
-        if ++n == (fm#W3Y2 - 2)
-          n := 1
-          if ios.keywait == "q"
-            ios.sdclose
-            ios.printcls
-            dlbox[0].redraw
-            dlbox[1].redraw
-            return
+      ch := ios.sdgetc
+      if ch == ios#CHAR_NL OR ch == $0a                 'CR or NL
+        if ch == lch OR (lch <> ios#CHAR_NL AND lch <> $0a)
+          ios.printnl
+          lch := ch
+          if ++n == (fm#W3Y2 - 2)
+            n := 1
+            if ios.keywait == "q"
+              ios.sdclose
+              ios.printcls
+              dlbox[0].redraw
+              dlbox[1].redraw
+              return
+        else
+          lch := 0
+      else
+        ios.printchar(ch)
+        lch := ch
     until ios.sdeof                                     'ausgabe bis eof
   ios.print(string(13,"[EOF]"))
   ios.keywait

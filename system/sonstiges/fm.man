@@ -1,21 +1,22 @@
-ï»¿linkes fenster		- sd-card
-rechtes fenster		- ramdisk
 
-pfeiltasten		- cursor bewegen
-bild hoch/runter	- nÃ¤chste/vorige fensterseite
-return			- verzeichnis Ã¶ffnen
-backspace		- verzeichnis schlieÃŸen
-space			- eintrag selektieren
-tab			- fenster wechseln
-pos1			- cursor auf ersten eintrag
+linkes fenster   - sd-card
+rechtes fenster  - ramdisk
 
-f1			- textdatei anzeigen
-f2			- selektierte dateien auf sd lÃ¶schen
-f3			- selektierte dateien von sd in ram laden
-f4			- selektierte dateien von ram auf sd speichern
-f5			- gesamten ram lÃ¶schen
-f6			- sd auswerfen
-f7			- verzeichnis erstellen
-f8			- alle eintrÃ¤ge selektieren/deselektieren
-f9			- lenkes fenster maximieren/verkleinern
-f10			- filemanager verlassen
+pfeiltasten      - cursor bewegen
+bild hoch/runter - nächste/vorige fensterseite
+return           - verzeichnis öffnen
+backspace        - verzeichnis schließen
+space            - eintrag selektieren
+tab              - fenster wechseln
+pos1             - cursor auf ersten eintrag
+
+f1               - textdatei anzeigen
+f2               - selektierte dateien auf sd löschen
+f3               - selektierte dateien von sd in ram laden
+f4               - selektierte dateien von ram auf sd speichern
+f5               - gesamten ram löschen
+f6               - sd auswerfen
+f7               - verzeichnis erstellen
+f8               - alle einträge selektieren/deselektieren
+f9               - lenkes fenster maximieren/verkleinern
+f10              - filemanager verlassen

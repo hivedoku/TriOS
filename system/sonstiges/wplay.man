@@ -1,3 +1,4 @@
+
 /?          : Hilfetext
 /p name.wav : WAV-Datei abspielen
 /d          : Verzeichnis wiedergeben

@@ -556,7 +556,7 @@ PRI ircConnect | t
   handleStatusStr(@strWaitConnect, 2, TRUE)
 
   t := cnt
-  repeat until (cnt - t) / clkfreq > 1    '1s lang Meldungen des Servers entgegennehmen
+  repeat until (ircsrv[0] <> 0) or ((cnt - t) / clkfreq > 10)    'bis zu erster Serverantwort (max. 10s lang) Meldungen des Servers entgegennehmen
     ircGetline
 
 PRI ircClose
@@ -630,7 +630,7 @@ PRI ircPart(strMsg)
 
 PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
 
-  if readLine(2000) 'vollständige Zeile empfangen
+  if readLine(2000)                                                           'vollständige Zeile empfangen
 
     secsrvact := 0                                                            'Sekunden seit letzter Serveraktivität zurücksetzen
     if receive_str[0] == ":"                                                  'Prefix folgt (sollte jede hereinkommende Message enthalten)
@@ -708,6 +708,30 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
         temp_str[x] := 0
         handleStatusStr(@temp_str, 2, TRUE)
     elseif str.startsWithCharacters(commandstr, string("NOTICE "))            'Notiz
+      chanstr := commandstr + 8
+      if (msgstr := str.replaceCharacter(chanstr, " ", 0))
+        msgstr++
+        nickstr := @receive_str[1]
+          if str.replaceCharacter(nickstr, "!", 0)
+            ' check for CTCP
+            i := strsize(msgstr)
+            if byte[msgstr] == 1 AND byte[msgstr][i - 1] == 1
+              ' it's a CTCP msg
+              byte[msgstr][i - 1] := 0                                        ' move string end up one spot
+              msgstr++                                                        ' seek past the CTCP byte
+              handleCTCPStr(nickstr, msgstr)
+      if (ircsrv[0] == 0) and prefixstr                                       'noch kein Servername ermittelt
+        msgstr := @strConnected
+        repeat x from 0 to strsize(msgstr) - 1
+          temp_str[x] := byte[msgstr][x]
+        repeat i from 0 to LEN_IRCSRV
+          ircsrv[i] := byte[prefixstr][i]
+          temp_str[x++] := byte[prefixstr][i]
+          if byte[prefixstr][i] == 0
+            quit
+        ircsrv[LEN_IRCSRV] := 0
+        handleStatusStr(@temp_str, 2, TRUE)
+        title_draw
 #ifdef __DEBUG
       handleStatusStr(commandstr, 2, FALSE)
 #endif
@@ -765,8 +789,9 @@ PRI ircGetLine | i, x, prefixstr, nickstr, chanstr, msgstr, commandstr
                   handleStatusStr(@temp_str, 2, TRUE)
     else                                                                      'unbekanntes Kommando
       handleStatusStr(commandstr, 2, FALSE)
-    ios.winset(3)
-    ios.curon
+    if (focus == 3) and (nooutput == FALSE)                                   'Eingabefenster aktiv und Ausgabe nicht gesperrt
+      ios.winset(3)
+      ios.curon
 
 PRI ircPutLine | i
 
@@ -837,13 +862,34 @@ PRI ircPutLine | i
     if handleidx == $FF
       handleStatusStr(@strNotConnected, 2, FALSE)
     else
-      sendStr(string("PRIVMSG "))
       if (i := str.replaceCharacter(@send_str[5], " ", 0))
+        sendStr(string("PRIVMSG "))
         sendStr(@send_str[5])
         sendStr(string(" :"))
         sendStr(i)
         sendStr(string(13,10))
         handleChatStr(@send_str[5], @nickname, i, 1)
+  elseif str.startsWithCharacters(@send_str, string("/me"))   'CTCP Action
+    if handleidx == $FF
+      handleStatusStr(@strNotConnected, 2, FALSE)
+    else
+      sendStr(string("PRIVMSG "))
+      sendStr(@channel)
+      sendStr(string(" :",1,"ACTION "))
+      sendStr(@send_str[4])
+      sendStr(string(1,13,10))
+      handleCTCPStr(@channel, @send_str[4])
+  elseif str.startsWithCharacters(@send_str, string("/ctcp")) 'allgemeine CTCP-Befehle
+    if handleidx == $FF
+      handleStatusStr(@strNotConnected, 2, FALSE)
+    else
+      if (i := str.replaceCharacter(@send_str[6], " ", 0))
+        sendStr(string("PRIVMSG "))
+        sendStr(@send_str[6])
+        sendStr(string(" :",1))
+        sendStr(i)
+        sendStr(string(1,13,10))
+        handleCTCPStr(@send_str[6], i)
   elseif send_str[0] == "/"                                   'anderes IRC-Kommando an Server
     if handleidx == $FF
       handleStatusStr(@strNotConnected, 2, FALSE)
@@ -995,7 +1041,8 @@ PRI win_contentRefresh | win, lines, lineNum, linePos, space, i
         ios.printnl
         space := 0
     ios.print(@send_str[linePos])                                'print remaining line
-  ios.curon
+  if (focus == 3) and (nooutput == FALSE)                        'Eingabefenster aktiv und Ausgabe nicht gesperrt
+    ios.curon
 
 PRI setscreen | buflen[4], i
 
@@ -1125,7 +1172,7 @@ PRI handleChatStr(chanstr, nickstr, msgstr, me) | i, timenicklen, msglineend, ch
     print_str[print_str_ptr++] := 0                'komplette Chat-Zeile fertig
     print_str[print_str_ptr] := 0
     print_str_ptr := 0
-    if scrolllinenr[1] == 0                        'Chatfenster nicht gescrollt
+    if (scrolllinenr[1] == 0) and (nooutput == FALSE)  'Chatfenster nicht gescrollt und Ausgabe nicht gesperrt
       ios.printnl
       printStrWin(@print_str)                      'im Chatfenster anzeigen
     printStrBuf(1)                                 'in Fensterpuffer schreiben
@@ -1172,7 +1219,7 @@ PRI handleCTCPStr(nickstr, msgstr) | i, msglineend
   print_str[print_str_ptr++] := 0         'komplette Chat-Zeile fertig
   print_str[print_str_ptr] := 0
   print_str_ptr := 0
-  if scrolllinenr[1] == 0
+  if (scrolllinenr[1] == 0) and (nooutput == FALSE)  'Chatfenster nicht gescrollt und Ausgabe nicht gesperrt
     ios.printnl
     printStrWin(@print_str)
   printStrBuf(1)
@@ -1208,7 +1255,7 @@ PRI handleStatusStr(statusstr, win, showtime) | i, statlineend
   print_str[print_str_ptr++] := 0                'komplette Status-Zeile fertig
   print_str[print_str_ptr] := 0
   print_str_ptr := 0
-  if scrolllinenr[win] == 0
+  if (scrolllinenr[win] == 0) and (nooutput == FALSE)  'Fenster nicht gescrollt und Ausgabe nicht gesperrt
     ios.printnl
     printStrWin(@print_str)
   printStrBuf(win)
@@ -1217,9 +1264,6 @@ PRI printStrWin(printStr) | i
 '' ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 '' │ Chat-Zeile in aktuellem Fenster zeigen                                                                                   │
 '' └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-
-  if nooutput                                              'wenn Ausgabe gesterrt
-    return
 
   i := 0
   repeat
@@ -1487,10 +1531,7 @@ DAT 'Locale
   strNotJoined     byte "Not joined to channel",0
 
   '                  |------------------------------------------------------------|
-  strHelp byte      "Internal commands:"
-          byte  $0d,"================="
-          byte  $0d
-          byte  $0d,"F1        This Help"
+  strHelp byte      "F1        This Help"
           byte  $0d,"F2  /set  Edit and save all settings"
           byte  $0d,"F3        Connect to server, login and join"
           byte  $0d,"F4  /join Join to channel (/join #<channel>)"
@@ -1501,6 +1542,8 @@ DAT 'Locale
           byte  $0d,"F9  /quit Disconnect from server"
           byte  $0d,"F10       Exit irc client"
           byte  $0d,"    /msg  Private Message (/msg <recipient> <text>)"
+          byte  $0d,"    /me   send own state/action (/me <action>)"
+          byte  $0d,"    /ctcp client-to-client (/ctcp <recipient> <command>)"
           byte  $0d,"    /srv  connect to server and login (srv <ip:port>)"
           byte  $0d,"    /save Save settings"
           byte  $0d,"Tab       Switch windows, scroll with cursor up/down"
@@ -1556,10 +1599,7 @@ DAT 'Locale
   strNotJoined     byte "Mit keinem Kanal verbunden",0
 
   '                  |------------------------------------------------------------|
-  strHelp byte      "Interne Befehle:"
-          byte  $0d,"================"
-          byte  $0d
-          byte  $0d,"F1        Diese Hilfe"
+  strHelp byte      "F1        Diese Hilfe"
           byte  $0d,"F2  /set  Alle Einstellungen bearbeiten und abspeichern"
           byte  $0d,"F3        Mit Server verbinden, anmelden und Kanal betreten"
           byte  $0d,"F4  /join Kanal betreten (/join #<Kanal>)"
@@ -1570,6 +1610,8 @@ DAT 'Locale
           byte  $0d,"F9  /quit Verbindung zu Server trennen"
           byte  $0d,"F10       Programm beenden"
           byte  $0d,"    /msg  Private Mitteilung (/msg <Empfänger> <Text>)"
+          byte  $0d,"    /me   eigenen Status/Aktion senden (/me <Aktion>)"
+          byte  $0d,"    /ctcp Client-to-Client (/ctcp <Empfänger> <Kommando>)"
           byte  $0d,"    /srv  Mit Server verbinden und anmelden (srv <IP:Port>)"
           byte  $0d,"    /save Einstellungen speichern"
           byte  $0d,"Tab       Fenster umschalten, scrollen mit Cursor hoch/runter"

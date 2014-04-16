@@ -1,3 +1,4 @@
+
 help                     - diese hilfe
 <sd:dateiname>           - bin/adm/bel-datei wird gestartet
 mount                    - sd-card mounten

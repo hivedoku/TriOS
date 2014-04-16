@@ -1,3 +1,4 @@
+
 /?             : hilfetext
 /p name.wav    : hss-datei abspielen
 /d             : verzeichnis abspielen
