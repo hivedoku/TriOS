@@ -1,13 +1,13 @@
 {{
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Autor: Ingo Kripahle                                                                                 │
-│ Copyright (c) 2010 Ingo Kripahle                                                                     │
+│ Autor: Ingo Kripahle  & Jörg Deckert                                                                 │
+│ Copyright (c) 2010 Ingo Kripahle, 2014 Jörg Deckert                                                  │
 │ See end of file for terms of use.                                                                    │
 │ Die Nutzungsbedingungen befinden sich am Ende der Datei                                              │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 Informationen   : hive-project.de
-Kontakt         : drohne235@googlemail.com
+Kontakt         : drohne235@googlemail.com, joergd@bitquell.de
 System          : TriOS
 Name            : Administra-Flash
 Chip            : Administra
@@ -52,6 +52,8 @@ Funktion        : Dieser Code wird von  Administra nach einem Reset aus dem EEPr
                     währendes des Abspielvorgangs führen zu einem undefinierten Verhalten von
                     Administra!
 
+                  SIDCog-Funktionen:
+
                   RTC-Funktionen:
                   - Datum, Uhrzeit auslesen
                   - Datum, Uhrzeit schreiben
@@ -59,17 +61,36 @@ Funktion        : Dieser Code wird von  Administra nach einem Reset aus dem EEPr
                   - NVRAM schreiben
                   - Wartefunktionen
 
+                  LAN-Funktionen:
+                  - Ethernet-Port mit Daten aus NVRAM oder SD-Dard initialisieren
+                  - ein- und ausgehende Verbindungen öffnen
+                  - Daten übertragen
+
 Komponenten     : HSS            1.2        Andrew Arsenault   Lizenz unklar
+                  SIDCog         Ver. 080   Johannes Ahlebrand MIT Lizenz
                   DACEngine      01/11/2010 Kwabena W. Agyeman MIT Lizenz
                   FATEngine      01/18/2009 Kwabena W. Agyeman MIT Lizenz
                   RTCEngine      11/22/2009 Kwabena W. Agyeman MIT Lizenz
+                  PropTCP        12/08/2009 Harrison Pham      Lizenz unklar
 
 COG's           : MANAGMENT     1 COG
                   FAT/RTC       1 COG
                   HSS           2 COG's
                   WAV           2 COG
-                  -------------------
-                                4 Cogs (WAV und HSS werden alternativ verwendet!)
+                  SIDCog's      2 COG's
+                  DMP/Tracker   1 COG   (dynamisch)
+                  NET           2 COG
+
+Defines         : __ADM_FAT      enable FAT engine (sd card handling)
+                  __ADM_HSS      enable HSS synthesizer
+                  __ADM_HSS_PLAY enable HSS player (only with __ADM_HSS)
+                  __ADM_WAV      enable WAV player
+                  __ADM_SID      enable SID player
+                  __ADM_LAN      enable LAN functions
+                  __ADM_RTC      enable RTC functions (FAT engine inherits it also)
+                  __ADM_PLX      enable plexbus
+                  __ADM_COM      enable serial port
+                  __ADM_AYS      enable AYS player
 
 Logbuch         :
 
@@ -124,6 +145,8 @@ Logbuch         :
 03-12-2010-stepha - RTC Datums- und Zeit Funktionen
 04-12-2010-stepha - NVRAM Funktionen
 17-04-2013-dr235  - konstanten für administra-funktionen komplett ausgelagert
+22-12-2013-joergd - LAN Funktionen
+17-12-2014-joergd - verschiedene Administra-Code-Versionen vereinheitlicht
 
 Kommandoliste   :
 
@@ -135,6 +158,19 @@ Notizen         :
 
 CON
 
+''default defines (please anable to compile from GUI)
+'#define __ADM_FAT
+'#define __ADM_HSS
+'#define __ADM_HSS_PLAY
+'#define __ADM_WAV
+'#define __ADM_RTC
+'#define __ADM_COM
+
+''other defines
+'#define __ADM_LAN
+'#define __ADM_SID
+'#define __ADM_AYS
+
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
 
@@ -145,8 +181,69 @@ _XINFREQ     = 5_000_000
 '             |  |  |  +- subversion (hinzufügungen)
 CHIP_VER  = $00_01_01_02
 
-CHIP_SPEC = gc#A_FAT|gc#A_LDR|gc#A_HSS|gc#A_WAV|gc#A_COM
+#ifdef __ADM_FAT
+CHIP_SPEC_FAT = gc#A_FAT
+CHIP_SPEC_LDR = gc#A_LDR
+#else
+CHIP_SPEC_FAT = 0
+CHIP_SPEC_LDR = 0
+#undef __ADM_WAV
+#undef __ADM_SID
+#undef __ADM_AYS
+#ifndef __ADMRTC
+#undef __ADM_LAN
+#endif
+#endif
 
+#ifdef __ADM_HSS
+CHIP_SPEC_HSS = gc#A_HSS
+#else
+CHIP_SPEC_HSS = 0
+#endif
+
+#ifdef __ADM_WAV
+CHIP_SPEC_WAV = gc#A_WAV
+#else
+CHIP_SPEC_WAV = 0
+#endif
+
+#ifdef __ADM_SID
+CHIP_SPEC_SID = gc#A_SID
+#else
+CHIP_SPEC_SID = 0
+#endif
+
+#ifdef __ADM_LAN
+CHIP_SPEC_LAN = gc#A_LAN
+#else
+CHIP_SPEC_LAN = 0
+#endif
+
+#ifdef __ADM_RTC
+CHIP_SPEC_RTC = gc#A_RTC
+#else
+CHIP_SPEC_RTC = 0
+#endif
+
+#ifdef __ADM_PLX
+CHIP_SPEC_PLX = gc#A_PLX
+#else
+CHIP_SPEC_PLX = 0
+#endif
+
+#ifdef __ADM_COM
+CHIP_SPEC_COM = gc#A_COM
+#else
+CHIP_SPEC_COM = 0
+#endif
+
+#ifdef __ADM_AYS
+CHIP_SPEC_AYS = gc#A_AYS
+#else
+CHIP_SPEC_AYS = 0
+#endif
+
+CHIP_SPEC = CHIP_SPEC_FAT|CHIP_SPEC_LDR|CHIP_SPEC_HSS|CHIP_SPEC_WAV|CHIP_SPEC_SID|CHIP_SPEC_LAN|CHIP_SPEC_RTC|CHIP_SPEC_PLX|CHIP_SPEC_COM|CHIP_SPEC_AYS
 '
 '          hbeat   --------+
 '          clk     -------+|
@@ -171,7 +268,15 @@ LED_OPEN     = gc#HBEAT                                 'led-pin für anzeige "d
 SD_BASE      = gc#A_SDD0                                'baspin cardreader
 CNT_HBEAT    = 5_000_0000                               'blinkgeschw. front-led
 
-MPLEN        = 12000                                    'größe des hss-musikpuffers
+MPLEN        = 12000                                    'hss music buffer
+
+'sidcog
+playRate        = 50                                    'Hz
+detune          = 1.006
+
+'Netzwerk-Puffergrößen (müssen Vielfaches von 2 sein!)
+rxlen        = 2048
+txlen        = 128
 
 'index für dmarker
 #0,     RMARKER                 'root
@@ -181,37 +286,59 @@ MPLEN        = 12000                                    'größe des hss-musikpu
         BMARKER
         CMARKER
 
+CON 'Signaldefinitionen --------------------------------------------------------------------------
+
+'signaldefinitionen administra (todo: nach glob-con.spin auslagern!!!)
+
+#14,     A_NETCS,A_NETSCK,A_NETSI,A_NETSO              'Pins zum ENC28J60
+
+CON 'NVRAM Konstanten --------------------------------------------------------------------------
+
+' todo: nach glob-con.spin auslagern!!!
+
+#4,     NVRAM_IPADDR
+#8,     NVRAM_IPMASK
+#12,    NVRAM_IPGW
+#16,    NVRAM_IPDNS
+#20,    NVRAM_IPBOOT
+#24,    NVRAM_HIVE       ' 4 Bytes
+
 OBJ
+#ifdef __ADM_FAT
   sdfat           : "adm-fat"        'fatengine
+#endif
+#ifdef __ADM_HSS
   hss             : "adm-hss"        'hydra-sound-system
+#endif
+#ifdef __ADM_WAV
   wav             : "adm-wav"        'sd-wave
+#endif
+#ifdef __ADM_SID
+  sid1            : "adm-sid"        'SIDCog
+  sid2            : "adm-sid"        'SIDCog
+#endif
+#ifdef __ADM_AYS
+  ay              : "adm-ay"         'AYcog - AY-3-891X / YM2149 emulator
+#endif
+#ifdef __ADM_RTC
   rtc             : "adm-rtc"        'RTC-Engine
+#endif
+#ifdef __ADM_COM
   com             : "adm-com"        'serielle schnittstelle
+#endif
+#ifdef __ADM_LAN
+  sock            : "driver_socket"  'LAN
+  num             : "glob-numbers"   'Number Engine
+#endif
+
   gc              : "glob-con"       'globale konstanten
 
 VAR
 
-  long  dmarker[6]                                      'speicher für dir-marker
   byte  tbuf[20]                                        'stringpuffer
   byte  tbuf2[20]
-  byte  bgmusic[MPLEN]                                  'hss-puffer
-  byte  sfxdat[16 * 32]                                 'sfx-slotpuffer
   byte  fl_syssnd                                       '1 = systemtöne an
-  byte  fl_sdwav
   byte  st_sound                                        '0 = aus, 1 = hss, 2 = wav
-  long  com_baud
-
-  ' variablen für sdwav-player
-
-  long leftVolume
-  long rightVolume
-  long DACCog                                           'cog-nummer das da-wandlers
-  long PlayCog                                          'cog-nummer des players
-  long PlayStack[50]                                    'stack für player
-  byte runPlayerFlag                                    'flag um player zu steuern: 0:stop, 1: run, 2: pause
-  long wavLen                                           'länge der abgespielten wav / 512
-  long wavPointer                                       'aktuelle position des players / 512
-
 
 CON ''------------------------------------------------- ADMINISTRA
 
@@ -229,6 +356,7 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         0:  !outa[LED_OPEN]                             'led blinken
 
 '       ----------------------------------------------  SD-FUNKTIONEN
+#ifdef __ADM_FAT
         gc#a_sdMount: sd_mount("M")                     'sd-card mounten                                              '
         gc#a_sdOpenDir: sd_opendir                      'direktory öffnen
         gc#a_sdNextFile: sd_nextfile                    'verzeichniseintrag lesen
@@ -259,13 +387,17 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_sdDmClr: sd_dmclr                          'dir-marker löschen
         gc#a_sdDmPut: sd_dmput                          'dir-marker status setzen
         gc#a_sdEOF: sd_eof                              'eof abfragen
+#endif '__ADM_FAT
 
 '       ----------------------------------------------  COM-FUNKTIONEN
+#ifdef __ADM_COM
         gc#a_comInit: com_init
         gc#a_comTx: com_tx
         gc#a_comRx: com_rx
+#endif '__ADM_COM
 
 '       ----------------------------------------------  RTC-FUNKTIONEN
+#ifdef __ADM_RTC
         gc#a_rtcGetSeconds: rtc_getSeconds              'Returns the current second (0 - 59) from the real time clock.
         gc#a_rtcGetMinutes: rtc_getMinutes              'Returns the current minute (0 - 59) from the real time clock.
         gc#a_rtcGetHours: rtc_getHours                  'Returns the current hour (0 - 23) from the real time clock.
@@ -284,6 +416,23 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_rtcGetNVSRAM: rtc_getNVSRAM                'Gets the selected NVSRAM value at the index (0 - 55).
         gc#a_rtcPauseForSec: rtc_pauseForSeconds        'Pauses execution for a number of seconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of seconds to pause for between 0 and 2,147,483,647.
         gc#a_rtcPauseForMSec: rtc_pauseForMilliseconds  'Pauses execution for a number of milliseconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of milliseconds to pause for between 0 and 2,147,483,647.
+        gc#a_rtcTest: rtc_test                          'Test if RTC Chip is available
+#endif '__ADM_RTC
+
+'       ----------------------------------------------  LAN-FUNKTIONEN
+#ifdef __ADM_LAN
+        gc#a_lanStart: lan_start                        'Start Network
+        gc#a_lanStop:lan_stop                           'Stop Network
+        gc#a_lanConnect: lan_connect                    'ausgehende TCP-Verbindung öffnen
+        gc#a_lanListen: lan_listen                      'auf eingehende TCP-Verbindung lauschen
+        gc#a_lanWaitConnTimeout: lan_waitconntimeout    'bestimmte Zeit auf Verbindung warten
+        gc#a_lanClose: lan_close                        'TCP-Verbindung schließen
+        gc#a_lanRXTime: lan_rxtime                      'bestimmte Zeit warten auf Byte aus Empfangspuffer
+        gc#a_lanRXData: lan_rxdata                      'Daten aus Empfangspuffer lesen
+        gc#a_lanTXData: lan_txdata                      'Daten senden
+        gc#a_lanRXByte: lan_rxbyte                      'wenn vorhanden, Byte aus Empfangspuffer lesen
+        gc#a_lanIsConnected: lan_isconnected            'TRUE, wenn Socket verbunden, sonst FALSE
+#endif '__ADM_LAN
 
 '       ----------------------------------------------  CHIP-MANAGMENT
         gc#a_mgrSetSound: mgr_setsound                  'soundsubsysteme verwalten
@@ -296,9 +445,12 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_mgrReboot: reboot                          'neu starten
 
 '       ----------------------------------------------  HSS-FUNKTIONEN
+#ifdef __ADM_HSS
         gc#a_hssLoad: hss_load                          'hss-datei in puffer laden
+#ifdef __ADM_HSS_PLAY
         gc#a_hssPlay: hss.hmus_load(@bgmusic)           'play
                       hss.hmus_play
+#endif '__ADM_HSS_PLAY
         gc#a_hssStop: hss.hmus_stop                     'stop
         gc#a_hssPause: hss.hmus_pause                   'pause
         gc#a_hssPeek: hss_peek                          'register lesen
@@ -308,8 +460,10 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_sfxSetSlot: sfx_setslot                    'sfx-slot setzen
         gc#a_sfxKeyOff: sfx_keyoff
         gc#a_sfxStop: sfx_stop
+#endif '__ADM_HSS
 
 '       ----------------------------------------------  WAV-FUNKTIONEN
+#ifdef __ADM_WAV
         gc#a_sdwStart: sdw_start                        'spielt wav-datei direkt von sd-card ab
         gc#a_sdwStop: sdw_stop                          'stopt wav-cog
         gc#a_sdwStatus: sdw_status                      'fragt status des players ab
@@ -317,6 +471,64 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_sdwRightVol: sdw_rightvol                  'lautstärke rechts
         gc#a_sdwPause: sdw_pause                        'player pause/weiter-modus
         gc#a_sdwPosition: sdw_position
+#endif '__ADM_WAV
+
+'       ----------------------------------------------  SIDCog: DMP-Player-Funktionen (SIDCog2)
+#ifdef __ADM_SID
+        gc#a_s_mdmpplay: sid_mdmpplay                     'dmp-file mono auf sid2 abspielen
+        gc#a_s_sdmpplay: sid_sdmpplay                     'dmp-file stereo auf beiden sids abspielen
+        gc#a_s_dmpstop: sid_dmpstop                       'dmp-player beenden
+        gc#a_s_dmppause: sid_dmppause                     'dmp-player pausenmodus
+        gc#a_s_dmpstatus: sid_dmpstatus                   'dmp-player statusabfrage
+        gc#a_s_dmppos: sid_dmppos                         'player-position im dumpfile
+        gc#a_s_mute: sid_mute                             'alle register löschen
+
+'       ----------------------------------------------  SIDCog1-Funktionen
+        gc#a_s1_setRegister: sid1.setRegister(bus_getchar,bus_getchar)
+        gc#a_s1_updateRegisters: sid1.updateRegisters(sub_getdat(25,@s1buffer))
+        gc#a_s1_setVolume: sid1.setVolume(bus_getchar)
+        gc#a_s1_play: sid1.play(bus_getchar,sub_getlong,bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_noteOn: sid1.noteOn(bus_getchar, sub_getlong)
+        gc#a_s1_noteOff: sid1.noteOff(bus_getchar)
+        gc#a_s1_setFreq: sid1.setFreq(bus_getchar,sub_getlong)
+        gc#a_s1_setWaveform: sid1.setWaveform(bus_getchar,bus_getchar)
+        gc#a_s1_setPWM: sid1.setPWM(bus_getchar,sub_getlong)
+        gc#a_s1_setADSR: sid1.setADSR(bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_setResonance: sid1.setResonance(bus_getchar)
+        gc#a_s1_setCutoff: sid1.setCutoff(sub_getlong)
+        gc#a_s1_setFilterMask: sid1.setFilterMask(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_setFilterType: sid1.setFilterType(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_enableRingmod: sid1.enableRingmod(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_enableSynchronization: sid1.enableSynchronization(bus_getchar,bus_getchar,bus_getchar)
+
+'       ----------------------------------------------  SIDCog2-Funktionen
+        gc#a_s2_setRegister: sid2.setRegister(bus_getchar,bus_getchar)
+        gc#a_s2_updateRegisters: sid2.updateRegisters(sub_getdat(25,@s1buffer))
+        gc#a_s2_setVolume: sid2.setVolume(bus_getchar)
+        gc#a_s2_play: sid2.play(bus_getchar,sub_getlong,bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_noteOn: sid2.noteOn(bus_getchar, sub_getlong)
+        gc#a_s2_noteOff: sid2.noteOff(bus_getchar)
+        gc#a_s2_setFreq: sid2.setFreq(bus_getchar,sub_getlong)
+        gc#a_s2_setWaveform: sid2.setWaveform(bus_getchar,bus_getchar)
+        gc#a_s2_setPWM: sid2.setPWM(bus_getchar,sub_getlong)
+        gc#a_s2_setADSR: sid2.setADSR(bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_setResonance: sid2.setResonance(bus_getchar)
+        gc#a_s2_setCutoff: sid2.setCutoff(sub_getlong)
+        gc#a_s2_setFilterMask: sid2.setFilterMask(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_setFilterType: sid2.setFilterType(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_enableRingmod: sid2.enableRingmod(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_enableSynchronization: sid2.enableSynchronization(bus_getchar,bus_getchar,bus_getchar)
+
+'       ----------------------------------------------  SID Zusatzfunktionen
+        gc#a_s_dmpreg: sid_dmpreg                                 'soundinformationen senden
+#endif '__ADM_SID
+
+'       ----------------------------------------------  AY-SOUNDFUNKTIONEN
+#ifdef __ADM_AYS
+        gc#a_ayStart: ay_start
+        gc#a_ayStop: ay_stop
+        gc#a_ayUpdateRegisters: ay_updateRegisters
+#endif '__ADM_AYS
 
 '       ----------------------------------------------  DEBUG-FUNKTIONEN
         255: mgr_debug                                  'debugfunktion
@@ -334,11 +546,14 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
 
   'grundzustand herstellen (hss aktiv + systemklänge an)
 
+#ifdef __ADM_HSS
   'hss starten
   hss.start                                             'soundsystem starten
   st_sound := 1                                         'hss aktiviert
   fl_syssnd := 1                                        'systemsound an
+#endif '__ADM_HSS
 
+#ifdef __ADM_FAT
   'sd-card starten
   clr_dmarker                                           'dir-marker löschen
   sdfat.FATEngine
@@ -347,23 +562,44 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
   until sd_mount("B") == 0
   'err := sd_mount("B")
   'siglow(err)
+#endif '__ADM_FAT
 
+#ifdef __ADM_WAV
   'wav starten
   leftVolume := 100
   rightVolume := 100
   PlayCog~
+#endif '__ADM_WAV
 
+#ifdef __ADM_SID
+  'SID soundsystem initialisieren
+  sidreg1 := sid1.start(gc#A_SOUNDL,0)                  'erste sidcog starten, adresse der register speichern
+  waitcnt(cnt+(clkfreq>>8))                             '
+  sidreg2 := sid2.start(gc#A_SOUNDR,0)                  'zweite sidcog starten
+#endif '__ADM_SID
+
+#ifdef __ADM_RTC
  'RTC initialisieren
   rtc.setSQWOUTFrequency(3)                             'RTC Uhrenquarzt Frequenz wählen
   rtc.setSQWOUTState(0)                                 'RT Zähler ein
+#endif '__ADM_RTC
 
+#ifdef __ADM_FAT
   'adm-code booten?
    ifnot \sdfat.openFile(string("adm.sys"), "R")        'test ob adm.sys vorhanden ist
       \sdfat.bootPartition(string("adm.sys"), ".")      'neuen code booten
+#endif '__ADM_FAT
 
+#ifdef __ADM_COM
   'serielle schnittstelle starten
   com_baud := 9600
   com.start(gc#SER_RX,gc#SER_TX,0,com_baud)             ' start the default serial interface
+#endif '__ADM_COM
+
+#ifdef __ADM_LAN
+  'LAN
+  lan_started := false                                  'LAN noch nicht gestartet
+#endif '__ADM_LAN
 
 PRI bus_putchar(zeichen)                                'chip: ein byte über bus ausgeben
 ''funktionsgruppe               : chip
@@ -397,11 +633,13 @@ PRI sighigh(err)                                        'chip: schneller hbeat |
 ''eingabe                       : -
 ''ausgabe                       : -
 
+#ifdef __ADM_HSS
    if fl_syssnd == 1
      if err == 0
        hss.sfx_play(1, @SoundFX3)                       'Heartbeat High
      else
        hss.sfx_play(1, @SoundFX7)                       'Error
+#endif
 
 PRI siglow(err)                                         'chip: langsamer hbeat | fehlersound
 ''funktionsgruppe               : chip
@@ -409,11 +647,13 @@ PRI siglow(err)                                         'chip: langsamer hbeat |
 ''eingabe                       : -
 ''ausgabe                       : -
 
+#ifdef __ADM_HSS
    if fl_syssnd == 1
      if err == 0
        hss.sfx_play(1, @SoundFX4)                       'Heartbeat High
      else
        hss.sfx_play(1, @SoundFX7)                       'Error
+#endif
 
 PRI clr_dmarker| i                                      'chip: dmarker-tabelle löschen
 ''funktionsgruppe               : chip
@@ -421,9 +661,11 @@ PRI clr_dmarker| i                                      'chip: dmarker-tabelle l
 ''eingabe                       : -
 ''ausgabe                       : -
 
+#ifdef __ADM_FAT
     i := 0
     repeat 6                                            'alle dir-marker löschen
       dmarker[i++] := TRUE
+#endif '__ADM_FAT
 
 CON ''------------------------------------------------- SUBPROTOKOLL-FUNKTIONEN
 
@@ -442,6 +684,18 @@ PRI sub_getstr | i,len                                  'sub: string einlesen
   len := bus_getchar                                    'längenbyte name empfangen
   repeat i from 0 to len - 1                            'dateiname einlesen
     tbuf[i] := bus_getchar
+
+PUB sub_getdat(len,datadr1):datadr2 | i                 'sub: daten einlesen
+''funktionsgruppe               : sub
+''funktion                      : subprotokoll um eine bestimmte anzahl bytes zu empfangen
+''eingabe                       : len     - anzahl der bytes
+''                              : datadr1 - adresse des datenspeichers
+''ausgabe                       : datadr2 - adresse des datenspeichers
+''busprotokoll                  : [get.byte(1)]..[get.byte(len)]
+
+  repeat i from 0 to len - 1                            'dateiname einlesen
+    tbuf[datadr1 + i] := bus_getchar
+  datadr2 := datadr1
 
 PRI sub_putstr(strptr)|len,i                            'sub: string senden
 ''funktionsgruppe               : sub
@@ -521,6 +775,7 @@ PRI mgr_setsound|sndstat                                'cmgr: soundsubsysteme v
 
   sndstat := 0
   case bus_getchar
+#ifdef __ADM_HSS
     0: if st_sound == 1
          hss.hmus_stop
          hss.sfx_stop(0)
@@ -531,7 +786,9 @@ PRI mgr_setsound|sndstat                                'cmgr: soundsubsysteme v
     1: if st_sound == 0
          sndstat := hss.start
          st_sound := 1
+#endif
 
+#ifdef __ADM_WAV
     2: if st_sound == 2
          cogstop(DACCog)
          st_sound := 0
@@ -539,6 +796,9 @@ PRI mgr_setsound|sndstat                                'cmgr: soundsubsysteme v
     3: if st_sound == 0
          sndstat := DACCog := wav.DACEngine(0)
          st_sound := 2
+#endif
+    99:
+
   bus_putchar(sndstat)
 
 PRI mgr_setsyssound                                     'cmgr: systemsound ein/ausschalten
@@ -573,9 +833,11 @@ PRI mgr_aload | err                                     'cmgr: neuen administra-
 ''ausgabe                       :
 ''busprotokoll                  : [096][sub_getstr.fn]
 ''                              : fn  - dateiname des neuen administra-codes
+#ifdef __ADM_FAT
   sub_getstr
   err := \sdfat.bootPartition(@tbuf, ".")
   sighigh(err)                                          'fehleranzeige
+#endif '__ADM_FAT
 
 PRI mgr_getcogs: cogs |i,c,cog[8]                       'cmgr: abfragen wie viele cogs in benutzung sind
 ''funktionsgruppe               : cmgr
@@ -639,9 +901,17 @@ PRI mgr_getspec                                         'cmgr: abfrage der spezi
 PRI mgr_debug                                           'cmgr: debug
 ' adresse der ersten variable senden
 
+#ifdef __ADM_FAT
   sub_putlong(@dmarker)                                 'adresse erste variable als marker
+#endif '__ADM_FAT
 
 CON ''------------------------------------------------- SD-LAUFWERKS-FUNKTIONEN
+
+#ifdef __ADM_FAT
+
+VAR
+
+  long  dmarker[6]                                      'speicher für dir-marker
 
 PRI sd_mount(mode) | err                                'sdcard: sd-card mounten frida
 ''funktionsgruppe               : sdcard
@@ -666,7 +936,9 @@ PRI sd_mount(mode) | err                                'sdcard: sd-card mounten
         dmarker[SMARKER] := sdfat.getDirCluster           'system-marker setzen
 
       sdfat.setDirCluster(dmarker[RMARKER])               'root-marker wieder aktivieren
+#ifdef __ADM_HSS
       hss.sfx_play(1, @SoundFX8)                          'on-sound
+#endif
   else                                                    'frida
     bus_putchar(0)                                        'frida
 
@@ -1015,7 +1287,9 @@ PRI sd_unmount | err                                    'sdcard: medium abmelden
   bus_putchar(err)                                      'ergebnis der operation senden
   ifnot err
     clr_dmarker
+#ifdef __ADM_HSS
   hss.sfx_play(1, @SoundFX9)                            'off-sound
+#endif
 
 PRI sd_dmact|markernr                                   'sdcard: einen dir-marker aktivieren
 ''funktionsgruppe               : sdcard
@@ -1079,7 +1353,17 @@ PRI sd_dmclr|markernr                                   'sdcard: einen dir-marke
   markernr := bus_getchar
   dmarker[markernr] := TRUE
 
+CON ''------------------------------------------------- End of SD CARD FUNCTIONS
+
+#endif ' __ADM_FAT
+
 CON ''------------------------------------------------- COM-FUNKTIONEN
+
+#ifdef __ADM_COM
+
+VAR
+
+  long  com_baud
 
 PRI com_init                                            'com: serielle schnittstelle initialisieren
 ''funktionsgruppe               : com
@@ -1110,7 +1394,20 @@ PRI com_rx                                              'com: zeichen empfangen
 
   bus_putchar(com.rx)
 
+CON ''------------------------------------------------- End of COM FUNCTIONS
+
+#endif ' __ADM_COM
+
 CON ''------------------------------------------------- HSS-FUNKTIONEN
+
+#ifdef __ADM_HSS
+
+VAR
+
+#ifdef __ADM_HSS_PLAY
+  byte  bgmusic[MPLEN]                                  'hss-puffer
+#endif
+  byte  sfxdat[16 * 32]                                 'sfx-slotpuffer
 
 PRI sfx_fire | slot, chan, slotadr                      'sfx: effekt im puffer abspielen
 ''funktionsgruppe               : sfx
@@ -1281,16 +1578,40 @@ PRI hss_load | err                                      'hss: musikdatei in puff
 ''                              : err - fehlernummer entspr. liste
 
    sub_getstr                                           'dateinamen einlesen
+#ifdef __ADM_FAT
    err := \sdfat.openFile(@tbuf, "r")                   'datei öffnen
    bus_putchar(err)                                     'ergebnis der operation senden
    if err == 0
      outa[LED_OPEN] := 1
+#ifdef __ADM_HSS_PLAY
      \sdfat.readData(@bgmusic, MPLEN)                   'datei laden
+#endif '__ADM_HSS_PLAY
      \sdfat.closeFile
      outa[LED_OPEN] := 0
+#else 'no __ADM_FAT
+   bus_putchar(err)
+#endif '__ADM_FAT
 
+CON ''------------------------------------------------- End of HSS FUNCTIONS
+
+#endif ' __ADM_HSS
 
 CON ''------------------------------------------------- WAV-FUNKTIONEN
+
+#ifdef __ADM_WAV
+
+VAR
+
+  byte  fl_sdwav
+
+  long leftVolume
+  long rightVolume
+  long DACCog                                           'cog-nummer das da-wandlers
+  long PlayCog                                          'cog-nummer des players
+  long PlayStack[50]                                    'stack für player
+  byte runPlayerFlag                                    'flag um player zu steuern: 0:stop, 1: run, 2: pause
+  long wavLen                                           'länge der abgespielten wav / 512
+  long wavPointer                                       'aktuelle position des players / 512
 
 PRI sdw_start | err                                     'sdw: startet extra cog mit sdwav-engine
 ''funktionsgruppe               : sdw
@@ -1433,7 +1754,174 @@ PRI sdw_position                                        'sdw: position des playe
   sub_putlong(wavPointer)
   sub_putlong(wavLen)
 
+CON ''------------------------------------------------- End of WAV FUNCTIONS
+
+#endif ' __ADM_WAV
+
+CON ''------------------------------------------------- SIDCog: DMP-Player-Funktionen (SIDCog2)
+
+#ifdef __ADM_SID
+
+VAR
+
+  long  sidreg1                                         'adresse register der sidcog 1
+  long  sidreg2                                         'adresse register der sidcog 2
+  long  dmpcog                                          'id der dmp-player-cog
+  long  dmpstack[50]                                    'stack für dmpcog
+  byte  sidbuffer[25]                                   'puffer für dmpcog
+  byte  dmpstatus                                       '0 = inaktiv; 1 = play; 2 = pause
+  long  dmppos                                          'position des players im dump
+  long  dmplen                                          'länge des dmp-files (anzahl regsitersätze)
+  byte  dmppause                                        'pauseflag
+  byte  s1buffer[25]                                    'registerpuffer sid1
+  byte  s2buffer[25]                                    'registerpuffer sid2
+
+PRI sid_mdmpplay | err                                  'sid: dmp-datei mono auf sid2 abspielen
+''funktionsgruppe               : sid
+''funktion                      : dmp-datei mono auf sid2 abspielen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [157][sub_getstr.fn][put.error]
+''                              : fn - name der dmp-datei
+''                              : error - fehlernummer entspr. list
+   sub_getstr
+   err := \sdfat.openFile(@tbuf, "r")
+   if err == 0
+      dmppause := 0
+      dmpcog := cognew(sid_dmpmcog,@dmpstack) + 1       'player-cog starten
+   bus_putchar(err)                                     'ergebnis der operation senden
+
+PRI sid_sdmpplay | err                                  'sid: dmp-datei stereo auf beiden sid's abspielen
+
+   sub_getstr
+   err := \sdfat.openFile(@tbuf, "r")
+   if err == 0
+      dmppause := 0
+      dmpcog := cognew(sid_dmpscog,@dmpstack) + 1       'player-cog starten
+   bus_putchar(err)                                     'ergebnis der operation senden
+
+PRI sid_dmpstop                                         'sid: dmp-player stoppen
+  if dmpcog
+    cogstop(dmpcog-1)
+    dmpstatus := 0
+
+PRI sid_dmppause|i                                      'sid: dmp-player pause
+  case dmppause
+    0: dmppause := 1
+       repeat until dmpstatus == 2
+       sid1.setVolume(0)
+       sid2.setVolume(0)
+    1: dmppause := 0
+
+PRI sid_dmpstatus                                       'sid: status des dmp-players abfragen
+  bus_putchar(dmpstatus)
+
+PRI sid_dmppos                                          'sid: position/länge des dmp-players abfragen
+  sub_putlong(dmppos)
+  sub_putlong(dmplen)
+
+PRI sid_mute|sidnr,i                                    'sid: ruhe!
+
+  repeat i from 0 to 25
+    sidbuffer[i] := 0
+  sidnr := bus_getchar
+  case sidnr
+    1: sid1.updateRegisters(@sidbuffer)
+    2: sid2.updateRegisters(@sidbuffer)
+    3: sid1.updateRegisters(@sidbuffer)
+       sid2.updateRegisters(@sidbuffer)
+
+PRI sid_dmpmcog | i                                     'sid: dmpcog - mono, sid2
+
+  dmpstatus := 1                                        'player läuft
+  dmplen := \sdfat.listSize / 25
+  dmppos := 0
+  repeat dmplen
+    waitcnt(cnt+(clkfreq/playRate))                     'warten auf den c64-vbl :)
+
+   \sdfat.readData(@sidbuffer,25)                      '25 byte in den puffer einlesen
+
+'    repeat i from 0 to 24                               'da blocktransfer nicht sicher funktioniert
+'      sidbuffer[i] := sdfat.readCharacter               'füllen wir den puffer "manuell"
+
+    sid2.updateRegisters(@sidbuffer)                    'puffer in die sid-register schreiben
+    dmppos++
+    if dmppause == 1
+      dmpstatus := 2
+    else
+      dmpstatus := 1
+    repeat while dmppause == 1                          'warten solange pause
+  dmpstatus := 0                                        'player beendet
+
+PRI sid_dmpscog | i                                     'sid: dmpcog - mono, sid2
+
+  dmpstatus := 1                                        'player läuft
+  dmplen := \sdfat.listSize / 25
+  dmppos := 0
+  repeat dmplen
+    waitcnt(cnt+(clkfreq/playRate))                     'warten auf den c64-vbl :)
+
+   \sdfat.readData(@sidbuffer,25)                      '25 byte in den puffer einlesen
+
+'    repeat i from 0 to 24                               'da blocktransfer nicht sicher funktioniert
+'      sidbuffer[i] := sdfat.readCharacter               'füllen wir den puffer "manuell"
+
+    sid1.updateRegisters(@sidbuffer)                    'puffer in die sid-register schreiben
+    sid2.updateRegisters(@sidbuffer)                    'puffer in die sid-register schreiben
+    'eine sidcog etwas verstimmen
+    word[sidreg2+0 ] := (word[sidreg2+0 ]<<16)/trunc(65536.0/detune)
+    word[sidreg2+8 ] := (word[sidreg2+8 ]<<16)/trunc(65536.0/detune)
+    word[sidreg2+16] := (word[sidreg2+16]<<16)/trunc(65536.0/detune)
+    dmppos := dmppos + 1
+    if dmppause == 1
+      dmpstatus := 2
+    else
+      dmpstatus := 1
+    repeat while dmppause == 1                          'warten solange pause
+  dmpstatus := 0                                        'player beendet
+PRI sid_dmpreg                                          'sid: dmpregister senden
+
+  bus_putchar(byte[@sidbuffer+1])                       'kanal 1
+  bus_putchar(byte[@sidbuffer+0])
+  bus_putchar(byte[@sidbuffer+8])                       'kanal 2
+  bus_putchar(byte[@sidbuffer+7])
+  bus_putchar(byte[@sidbuffer+15])                      'kanal 3
+  bus_putchar(byte[@sidbuffer+14])
+
+  bus_putchar(byte[@sidbuffer+24])                      'volume
+
+CON ''------------------------------------------------- End of SID FUNCTIONS
+
+#endif ' __ADM_SID
+
+CON ''------------------------------------------------- AYS-Player-Funktionen
+
+#ifdef __ADM_AYS
+
+VAR
+
+  byte  AYregs[16]                                      'AY-Register
+
+PUB ay_start
+  ay.start( gc#A_SOUNDR, gc#A_SOUNDL, @AYregs )         'audioR, audioL, @AYregs
+
+PUB ay_stop
+  ay.stop
+
+PUB ay_updateRegisters | i
+  repeat i from 0 to 13
+    AYregs[i] := bus_getchar
+
+  ifnot AYregs[13] == 255
+    AYregs[13] := AYregs[13]&15
+
+CON ''------------------------------------------------- End of AYS FUNCTIONS
+
+#endif ' __ADM_AYS
+
 CON ''------------------------------------------------- RTC-FUNKTIONEN
+
+#ifdef __ADM_RTC
 
 PRI rtc_getSeconds                                      'rtc: Returns the current second (0 - 59) from the real time clock.
 ''funktionsgruppe               : rtc
@@ -1549,6 +2037,316 @@ PRI rtc_pauseForMilliseconds                            'rtc: Pauses execution f
 ''                              : Returns a puesdo random value derived from the current clock frequency and the time when called.
   sub_putlong(rtc.pauseForMilliseconds(sub_getlong))
 
+PRI probeRTC | hiveid
+
+  hiveid := rtc.getNVSRAM(NVRAM_HIVE)         'read first byte of hive id
+
+  rtc.setNVSRAM(NVRAM_HIVE, hiveid ^ $F)      'write back to NVRAM with flipped all bits
+  if rtc.getNVSRAM(NVRAM_HIVE) == hiveid ^ $F 'flipped bits are stored?
+    rtc.setNVSRAM(NVRAM_HIVE, hiveid)         'restore first byte of hive id
+    return(TRUE)                              'RTC found
+  else
+    rtc.setNVSRAM(NVRAM_HIVE, hiveid)         'still restore first byte of hive id
+    return(FALSE)                             'no RTC found
+
+PRI rtc_test                                            'rtc: Test if RTC Chip is available
+''funktionsgruppe               : rtc
+''busprotokoll                  : [059][put.avaliable]
+''                              : Returns TRUE if RTC is available, otherwise FALSE
+    bus_putchar(probeRTC)
+
+CON ''------------------------------------------------- End of RTC FUNCTIONS
+
+#endif ' __ADM_RTC
+
+CON ''------------------------------------------------- LAN-FUNKTIONEN
+
+#ifdef __ADM_LAN
+
+
+VAR
+
+  byte  lan_started                                     'LAN gestartet?
+  long  sockhandle[sock#sNumSockets]                    'Handle für mit sock.connect/sock.listen erstellten Socket
+  byte  bufidx[sock#sNumSockets]                        'zum Handle-Index gehörender Puffer-abschnitt
+                                                        '(zum Socket mit dem Handle 2 gehört der Pufferabschnitt aus bufidx[2])
+  byte  bufrx[rxlen*sock#sNumSockets]                   'LAN Empfangspuffer
+  byte  buftx[txlen*sock#sNumSockets]                   'LAN Sendepuffer
+
+DAT
+
+  strNVRAMFile byte  "nvram.sav",0                      'contains the 56 bytes of NVRAM, if RTC is not available
+
+PRI lan_start | hiveid, hivestr, strpos, macpos, i, a
+''funktionsgruppe               : lan
+''funktion                      : Netzwerk starten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [071]
+
+  if (not lan_started)
+
+    'Pufferindex zurücksetzen
+    i := 0
+    repeat sock#sNumSockets
+      bufidx[i++] := $FF  '0xFF: nicht zugewiesen
+
+    'IP-Parameter setzen
+#ifdef __ADM_RTC
+    if probeRTC
+      repeat a from 0 to 15
+        ip_addr[a] := rtc.getNVSRAM(NVRAM_IPADDR+a)                ' fill addresses
+      hiveid := rtc.getNVSRAM(NVRAM_HIVE)
+      hiveid += rtc.getNVSRAM(NVRAM_HIVE+1) << 8
+      hiveid += rtc.getNVSRAM(NVRAM_HIVE+2) << 16
+      hiveid += rtc.getNVSRAM(NVRAM_HIVE+3) << 24
+    else
+#endif '__ADM_RTC
+#ifdef __ADM_FAT
+#ifndef __ADM_RTC
+    if TRUE
+#endif '__ADM_RTC
+      dmarker[UMARKER] := sdfat.getDirCluster                       'u-marker setzen
+      ifnot dmarker[SMARKER] == TRUE                                's-marker aktivieren
+        sdfat.setDirCluster(dmarker[SMARKER])
+      ifnot \sdfat.openFile(@strNVRAMFile, "R")
+        \sdfat.setCharacterPosition(NVRAM_IPADDR)
+        repeat a from 0 to 15
+          ip_addr[a] := \sdfat.readCharacter                        ' fill addresses
+        \sdfat.setCharacterPosition(NVRAM_HIVE)
+        hiveid := \sdfat.readCharacter
+        hiveid += \sdfat.readCharacter << 8
+        hiveid += \sdfat.readCharacter << 16
+        hiveid += \sdfat.readCharacter << 24
+        \sdfat.closeFile
+      ifnot dmarker[UMARKER] == TRUE                                'U-marker aktivieren
+        sdfat.setDirCluster(dmarker[UMARKER])
+#endif '__ADM_FAT
+
+    hivestr := num.ToStr(hiveid, num#DEC)
+    strpos := strsize(hivestr)
+    macpos := 5
+    repeat while (strpos AND macpos)
+      strpos--
+      if(strpos)
+        strpos--
+      mac_addr[macpos] := num.FromStr(hivestr+strpos, num#HEX)
+      byte[hivestr+strpos] := 0
+      macpos--
+
+    sock.start(A_NETCS,A_NETSCK,A_NETSI,A_NETSO, -1, @mac_addr, @ip_addr)
+    lan_started := true
+
+
+PRI lan_stop
+''funktionsgruppe               : lan
+''funktion                      : Netzwerk anhalten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [072]
+
+  if lan_started
+    sock.stop
+    lan_started := false
+
+PRI lan_connect | ipaddr, remoteport, handle, handleidx, i
+''funktionsgruppe               : lan
+''funktion                      : ausgehende TCP-Verbindung öffnen (mit Server verbinden)
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [073][sub_getlong.ipaddr][sub_getword.remoteport][put.handleidx]
+''                              : ipaddr     - ipv4 address packed into a long (ie: 1.2.3.4 => $01_02_03_04)
+''                              : remoteport - port number to connect to
+''                              : handleidx  - lfd. Nr. der Verbindung (index des kompletten handle)
+
+  ipaddr := sub_getlong
+  remoteport := sub_getword
+
+  'freien Pufferabschnitt suchen
+  i := 0
+  repeat sock#sNumSockets
+    if bufidx[i] == $FF  '0xFF: nicht zugewiesen
+      quit
+    i++
+
+  ifnot (handle := sock.connect(ipaddr, remoteport, @bufrx[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
+    sock.resetBuffers(handle)
+    handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
+    sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
+    bufidx[i] :=handleidx
+    bus_putchar(handleidx)                                      'handleidx senden
+  else
+    bus_putchar($FF)
+
+PRI lan_listen | port, handle, handleidx, i
+''funktionsgruppe               : lan
+''funktion                      : Port für eingehende TCP-Verbindung öffnen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [074][sub_getword.port][put.handleidx]
+''                              : port       - zu öffnende Portnummer
+''                              : handleidx  - lfd. Nr. der Verbindung (index des kompletten handle)
+
+  port := sub_getword
+
+    'freien Pufferabschnitt suchen
+  i := 0
+  repeat sock#sNumSockets
+    if bufidx[i] == $FF  '0xFF: nicht zugewiesen
+      quit
+    i++
+
+  ifnot (handle := sock.listen(port, @bufrx[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
+    handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
+    sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
+    bufidx[i] :=handleidx
+    bus_putchar(handleidx)                                      'handleidx senden
+  else
+    bus_putchar($FF)
+
+PRI lan_waitconntimeout | handleidx, timeout, t, connected
+''funktionsgruppe               : lan
+''funktion                      : bestimmte Zeit auf Verbindung warten
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [075][get.handleidx][sub_getword.timeout][put.connected]
+''                              : handleidx     - lfd. Nr. der zu testenden Verbindung
+''                              : timeout    - Timeout in Millisekunden
+''                              : connected  - True, if connected
+
+  handleidx := bus_getchar
+  timeout := sub_getword
+
+  t := cnt
+  repeat until (connected := sock.isConnected(sockhandle[handleidx])) or (((cnt - t) / (clkfreq / 1000)) > timeout)
+
+  bus_putchar(connected)
+
+PRI lan_close | handleidx, i
+''funktionsgruppe               : lan
+''funktion                      : TCP-Verbindung (ein- oder ausgehend) schließen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [076][get.handleidx]
+''                              : handleidx - lfd. Nr. der zu schließenden Verbindung
+
+  handleidx := bus_getchar
+
+  sock.close(sockhandle[handleidx])
+
+  'reservierten Pufferabschnitt freigeben
+  i := 0
+  repeat sock#sNumSockets
+    if bufidx[i++] == handleidx  '0xFF: nicht zugewiesen
+      bufidx[i++] := $FF
+      quit
+
+
+PRI lan_rxtime | handleidx, timeout, t, rxbyte
+''funktionsgruppe               : lan
+''funktion                      : angegebene Zeit auf ASCII-Zeichen warten
+''                              : nicht verwenden, wenn anderes als ASCII (0 - 127) empfangen wird
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [077][get.handleidx][sub_getword.timeout][put.rxbyte]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : timeout   - Timeout in Millisekunden
+''                              : rxbyte    - empfangenes Zeichen (0 - 127) oder
+''                              :             sock#RETBUFFEREMPTY (-1) wenn Timeout oder keine Verbindung mehr
+
+  handleidx := bus_getchar
+  timeout := sub_getword
+
+  t := cnt
+  repeat until (rxbyte := sock.readByteNonBlocking(sockhandle[handleidx])) => 0 or (not sock.isConnected(sockhandle[handleidx])) or (cnt - t) / (clkfreq / 1000) > timeout
+
+  bus_putchar(rxbyte)
+
+PRI lan_rxdata | handleidx, len, rxbyte, error
+''funktionsgruppe               : lan
+''funktion                      : bei bestehender Verbindung die angegebene Datenmenge empfangen
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [078][get.handleidx][sub_getlong.len][put.byte1][put.byte<len>][put.error]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : len       - Anzahl zu empfangender Bytes
+''                              : error     - ungleich Null bei Fehler
+
+  error := FALSE
+  handleidx := bus_getchar
+  len := sub_getlong
+
+  repeat len
+    ifnot error
+      repeat while (rxbyte := sock.readByteNonBlocking(sockhandle[handleidx])) < 0
+        ifnot sock.isConnected(sockhandle[handleidx])
+          error := sock#ERRSOCKETCLOSED
+          quit
+    bus_putchar(rxbyte)
+
+  bus_putchar(error)
+
+PRI lan_txdata | handleidx, len, txbyte, error
+''funktionsgruppe               : lan
+''funktion                      : bei bestehender Verbindung die angegebene Datenmenge senden
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [079][get.handleidx][sub_getlong.len][get.byte1][get.byte<len>][put.error]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : len       - Anzahl zu sendender Bytes
+''                              : error     - ungleich Null bei Fehler
+
+  error := FALSE
+  handleidx := bus_getchar
+  len := sub_getlong
+
+  repeat len
+    txbyte := bus_getchar
+    ifnot error
+      repeat while sock.writeByteNonBlocking(sockhandle[handleidx], txbyte) < 0
+        ifnot sock.isConnected(sockhandle[handleidx])
+          error := sock#ERRSOCKETCLOSED
+          quit
+
+  bus_putchar(error)
+
+PRI lan_rxbyte
+''funktionsgruppe               : lan
+''funktion                      : wenn vorhanden, ein empfangenes Byte lesen
+''                              : nicht verwenden, wenn auch $FF empfangen werden kann
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [080][get.handleidx][put.rxbyte]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : rxbyte    - empfangenes Zeichen oder
+''                              :             sock#RETBUFFEREMPTY (-1) wenn kein Zeichen vorhanden
+
+  bus_putchar(sock.readByteNonBlocking(sockhandle[bus_getchar]))
+
+PRI lan_isconnected
+''funktionsgruppe               : lan
+''funktion                      : Returns true if the socket is connected, false otherwise
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [081][get.handleidx][put.connected]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : connected - TRUE wenn verbunden, sonst FALSE
+
+  bus_putchar(sock.isConnected(sockhandle[bus_getchar]))
+
+DAT
+                long                                    ' long alignment for addresses
+  ip_addr       byte    10,  1, 1, 1                    'ip
+  ip_subnet     byte    255, 255, 255, 0                'subnet-maske
+  ip_gateway    byte    10,  1, 1, 254                  'gateway
+  ip_dns        byte    10,  1, 1, 254                  'dns
+  ip_boot       long    0                               'boot-server (IP address in long)
+  mac_addr      byte    $c0, $de, $ba, $be, $00, $00    'mac-adresse
+
+CON ''------------------------------------------------- End of LAN FUNCTIONS
+
+#endif ' __ADM_LAN
+
 DAT                                                     'dummyroutine für getcogs
                         org
 '
@@ -1559,7 +2357,7 @@ entry                   jmp     entry                   'just loops
 
 
 DAT                                                     'feste sfx-slots
-
+#ifdef __ADM_HSS
                                'Wav 'Len 'Fre 'Vol 'LFO 'LFW 'FMa 'AMa
 SoundFX1                byte    $01, $FF, $80, $0F, $0F, $00, $07, $90
                                 'Att 'Dec 'Sus 'Rel
@@ -1609,6 +2407,7 @@ SoundFX9                                                                        
 byte $00,$05,$33,$0F,$05,$03,$10,$00,$FF,$00,$50,$11
 byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01
 
+#endif '__ADM_HSS
 
 {{
 
@@ -1628,4 +2427,3 @@ byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 │ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 }}
-

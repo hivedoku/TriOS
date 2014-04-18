@@ -25,7 +25,7 @@ mkdir ${flash}
 # Flashdateien erzeugen
 # --> bin/flash
 
-${BSTC} -L ${libpath} ${D} -b -O a flash/administra/admflash.spin
+${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_HSS -D __ADM_HSS_PLAY -D __ADM_WAV -D __ADM_RTC -D __ADM_COM -b -O a flash/administra/admflash.spin
 cp admflash.binary ${flash}
 mv admflash.binary ${sdsys}/admsys.adm
 
@@ -52,12 +52,12 @@ mv regime.binary ${sd}/reg.sys
 # admsid, admay, admnet
 # htxt, g0key
 
-${BSTC} -L ${libpath} ${D} -b -O a system/administra/admsid/admsid.spin
-mv admsid.binary ${sdsys}/admsid.adm
-${BSTC} -L ${libpath} ${D} -b -O a system/administra/admay/admay.spin
-mv admay.binary ${sdsys}/admay.adm
-${BSTC} -L ${libpath} ${D} -b -O a system/administra/admnet/admnet.spin
-mv admnet.binary ${sdsys}/admnet.adm
+${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_SID -b -O a flash/administra/admflash.spin
+mv admflash.binary ${sdsys}/admsid.adm
+${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_AYS -b -O a flash/administra/admflash.spin
+mv admflash.binary ${sdsys}/admay.adm
+${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_HSS -D __ADM_LAN -D __ADM_RTC -D __ADM_COM -b -O a flash/administra/admflash.spin
+mv admflash.binary ${sdsys}/admnet.adm
 
 ${BSTC} -L ${libpath} ${D} -b -O a system/bellatrix/bel-htext/htext.spin
 mv htext.binary ${sdsys}/htext.bel
