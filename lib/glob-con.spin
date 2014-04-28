@@ -141,16 +141,19 @@ A_BLT           = %00000000_00000000_00001000_00000000
         a_sdDmGet                                       'dir-marker status abfragen
         a_sdDmClr                                       'dir-marker löschen
         a_sdDmPut                                       'dir-marker status setzen
-        a_sdEOF                  '30                    'eof abfragen
-
-'       ----------------------------------------------  COM-FUNKTIONEN
-#31,    a_comInit
-        a_comTx
-        a_comRx                  '33
+        a_sdEOF                                         'eof abfragen
+        a_sdPos                                         'zeiger in Datei abfragen
+        a_sdCopy                                        'Datei kopieren
+        a_sdDirSize              '33                    'Dateigrösse ->ist quatsch
 
 '       ----------------------------------------------  Bluetooth-Funktionen
 #35,    a_bltCommand_On
         a_bltCommand_Off         '36
+
+'       ----------------------------------------------  COM-FUNKTIONEN
+#37,    a_comInit
+        a_comTx
+        a_comRx                  '39
 
 '       ----------------------------------------------  RTC-FUNKTIONEN
 #40,    a_rtcTest                                       'Test if RTC Chip is available
@@ -306,7 +309,10 @@ A_BLT           = %00000000_00000000_00001000_00000000
         a_s2_enableSynchronization
 
 '       ----------------------------------------------  Zusatzfunktionen
-        a_s_dmpreg    '196                              'soundinformationen senden
+        a_s2_resetRegisters
+        a_s1_resetRegisters
+        a_s_beep
+        a_s_dmpreg          '199                       'soundinformationen senden
 
 '       ----------------------------------------------  AY-SOUNDFUNKTIONEN
 #200,   a_ayStart

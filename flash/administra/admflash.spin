@@ -83,6 +83,7 @@ COG's           : MANAGMENT     1 COG
                   DCF receiver  1 COG
 
 Defines         : __ADM_FAT      enable FAT engine (sd card handling)
+                  __ADM_FAT_EXT  enable FAT extension for PLEXUS
                   __ADM_HSS      enable HSS synthesizer
                   __ADM_HSS_PLAY enable HSS player (only with __ADM_HSS)
                   __ADM_WAV      enable WAV player
@@ -162,20 +163,21 @@ Notizen         :
 CON
 
 ''default defines (please anable to compile from GUI)
-#define __ADM_FAT
+'#define __ADM_FAT
 '#define __ADM_HSS
 '#define __ADM_HSS_PLAY
 '#define __ADM_WAV
-#define __ADM_RTC
+'#define __ADM_RTC
 '#define __ADM_COM
 
 ''other defines
+'#define __ADM_FAT_EXT
 '#define __ADM_LAN
-#define __ADM_SID
+'#define __ADM_SID
 '#define __ADM_AYS
-#define __ADM_PLX
-#define __ADM_DCF
-#define __ADM_BLT
+'#define __ADM_PLX
+'#define __ADM_DCF
+'#define __ADM_BLT
 
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
@@ -349,7 +351,7 @@ OBJ
   num             : "glob-numbers"   'Number Engine
 #endif
 #ifdef __ADM_PLX
-  com             : "adm-plx"        'PlexBux
+  plx             : "adm-plx"        'PlexBux
 #endif
 #ifdef __ADM_DCF
   dcf             : "adm-dcf"        'DCF-77
@@ -420,7 +422,18 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_sdDmClr: sd_dmclr                          'dir-marker löschen
         gc#a_sdDmPut: sd_dmput                          'dir-marker status setzen
         gc#a_sdEOF: sd_eof                              'eof abfragen
+#ifdef __ADM_FAT_EXT
+        gc#a_sdPos: sd_pos                              'Zeiger in Datei abfragen
+        gc#a_sdCopy: sd_copy                            'Datei kopieren
+        gc#a_sdDirSize: sd_dirsize                      'Dateigrösse ->ist quatsch
+#endif '__ADM_FAT_EXT
 #endif '__ADM_FAT
+
+'       ----------------------------------------------  Bluetooth-FUNKTIONEN
+#ifdef __ADM_BLT
+        gc#a_bltCommand_On: blt_setCommandMode
+        gc#a_bltCommand_Off: blt_setNormalMode
+#endif '__ADM_BLT
 
 '       ----------------------------------------------  COM-FUNKTIONEN
 #ifdef __ADM_COM
@@ -428,12 +441,6 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_comTx: com_tx
         gc#a_comRx: com_rx
 #endif '__ADM_COM
-
-'       ----------------------------------------------  Bluetooth-FUNKTIONEN
-#ifdef __ADM_BLT
-        gc#a_bltCommand_On: blt_setCommandMode
-        gc#a_bltCommand_Off: blt_setNormalMode
-#endif '__ADM_BLT
 
 '       ----------------------------------------------  RTC-FUNKTIONEN
 #ifdef __ADM_RTC
@@ -524,6 +531,25 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_sfxStop: sfx_stop
 #endif '__ADM_HSS
 
+'       ----------------------------------------------  PLX-Funktionen
+#ifdef __ADM_PLX
+        gc#a_plxRun: plx.run                            'plx-bus freigeben
+        gc#a_plxHalt: plx.halt                          'plx-bus anfordern
+        gc#a_plxIn: plx_in                              'port einlesen
+        gc#a_plxOut: plx_out                            'port ausgeben
+        gc#a_plxCh: plx_ch                              'ad-wandler auslesen
+        gc#a_plxGetReg: plx_getReg                      'poller-register lesen
+        gc#a_plxSetReg: plx_setReg                      'poller-register setzen
+        gc#a_plxStart: plx.start                        'i2c-dialog starten
+        gc#a_plxStop: plx.stop                          'i2c-dialog beenden
+        gc#a_plxWrite: plx_write                        'i2c byte senden
+        gc#a_plxRead: plx_read                          'i2c byte empfangen
+        gc#a_plxPing: plx_ping                          'abfrage ob device vorhanden ist
+        gc#a_plxSetAdr: plx_setAddr                     'adressen adda/ports für poller setzen
+'       ----------------------------------------------  GAMEDEVICES
+        gc#a_Joy: joy_get                               'Joystick abfragen (1 x 8bit Port)
+#endif '__ADM_PLX
+
 '       ----------------------------------------------  WAV-FUNKTIONEN
 #ifdef __ADM_WAV
         gc#a_sdwStart: sdw_start                        'spielt wav-datei direkt von sd-card ab
@@ -582,6 +608,9 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_s2_enableSynchronization: sid2.enableSynchronization(bus_getchar,bus_getchar,bus_getchar)
 
 '       ----------------------------------------------  SID Zusatzfunktionen
+        gc#a_s2_resetRegisters: sid2.resetRegisters
+        gc#a_s1_resetRegisters: sid1.resetRegisters
+        gc#a_s_beep: sid_beep
         gc#a_s_dmpreg: sid_dmpreg                                 'soundinformationen senden
 #endif '__ADM_SID
 
@@ -657,6 +686,11 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
   com_baud := 9600
   com.start(gc#SER_RX,gc#SER_TX,0,com_baud)             'start the default serial interface
 #endif '__ADM_COM
+
+#ifdef __ADM_PLX
+  plx.init                                              'defaultwerte setzen, poller-cog starten
+  plx.run                                               'plexbus freigeben (poller läuft)
+#endif '__ADM_PLX
 
 #ifdef __ADM_LAN
   'LAN
@@ -979,6 +1013,92 @@ CON ''------------------------------------------------- SD-LAUFWERKS-FUNKTIONEN
 VAR
 
   long  dmarker[6]                                      'speicher für dir-marker
+
+#ifdef __ADM_FAT_EXT
+
+  byte  copy_buffer[4002]                               'Kopier-Puffer
+
+PRI sddmact(markernr)
+
+    ifnot dmarker[markernr] == TRUE
+          sdfat.setDirCluster(dmarker[markernr])
+
+PRI sd_dirsize                                          'Anzahl Einträge im aktuellen Verzeichnis
+'    sub_putlong(\sdfat.listSize)
+
+PRI sd_pos
+    sub_putlong(sdfat.getCharacterPosition)
+
+PRI sd_copy|laenge,schleife,rest,m,n,i,cpm,psm,e
+    cpm:=sub_getlong                         'verzeichnismarker lesen (quelle)
+    psm:=sub_getlong                         'verzeichnismarker lesen (ziel)
+    sub_getstr                               'dateiname lesen @tbuff
+
+    outa[LED_OPEN]~~                         'LED an
+
+    dmarker[2] := cpm
+    sddmact(2)
+
+    \sdfat.openFile(@tbuf, "R")
+    laenge:=\sdfat.listSize
+    \sdfat.closeFile
+
+    schleife:=laenge/4000
+    rest:=laenge-(schleife*4000)
+
+    m:=0
+    n:=0
+    if schleife>0                                      'zu kopierende Datei größer 4001 Bytes?, ansonsten gleich zu Rest springen
+       repeat schleife                                 'Blöcke zu je 4001 Byte kopieren
+              dmarker[2] := cpm
+              sddmact(2)
+
+             \sdfat.openFile(@tbuf2, "R")
+             \sdfat.setCharacterPosition(m)
+             \sdfat.readData(@copy_buffer, 4001)
+
+             m:=\sdfat.getCharacterPosition-1
+             \sdfat.closeFile
+             dmarker[2] := psm
+             sddmact(2)
+
+             \sdfat.openFile(@tbuf, "W")
+             \sdfat.setCharacterPosition(m)
+             \sdfat.writeData(@copy_buffer, 4001)
+
+             n:=\sdfat.getCharacterPosition
+             \sdfat.closeFile
+             if bus_getchar==1
+                \sdfat.closeFile
+                sub_putlong(n)
+                return
+             sub_putlong(n)                            'Kopierfortschritt zu Regnatix senden
+
+
+    '************und den Rest kopieren********************
+    dmarker[2] := cpm
+    sddmact(2)
+
+    \sdfat.openFile(@tbuf2, "R")
+    \sdfat.setCharacterPosition(m)
+    \sdfat.readData(@copy_buffer, rest)
+
+'    m:=\sdfat.getCharacterPosition
+    \sdfat.closeFile
+    dmarker[2] := psm
+    sddmact(2)
+
+    \sdfat.openFile(@tbuf, "W")
+    \sdfat.setCharacterPosition(n)
+    \sdfat.writeData(@copy_buffer, rest)
+
+    'n:=\sdfat.getCharacterPosition
+    \sdfat.closeFile
+    sub_putlong(-1)
+
+    outa[LED_OPEN]~                                     'LED aus
+
+#endif '__ADM_FAT_EXT
 
 PRI sd_mount(mode) | err                                'sdcard: sd-card mounten frida
 ''funktionsgruppe               : sdcard
@@ -1372,7 +1492,6 @@ PRI sd_dmact|markernr                                   'sdcard: einen dir-marke
     bus_putchar(sdfat#err_noError)
   else
     bus_putchar(sdfat#err_noError)
-
 
 PRI sd_dmset|markernr                                   'sdcard: einen dir-marker setzen
 ''funktionsgruppe               : sdcard
@@ -1845,6 +1964,10 @@ CON ''------------------------------------------------- SIDCog: DMP-Player-Funkt
 
 #ifdef __ADM_SID
 
+DAT                                                     'dummyroutine für getcogs
+
+  noteTable word 16350, 17320, 18350, 19450, 20600, 21830, 23120, 24500, 25960, 27500, 29140, 30870
+
 VAR
 
   long  sidreg1                                         'adresse register der sidcog 1
@@ -1972,6 +2095,33 @@ PRI sid_dmpreg                                          'sid: dmpregister senden
   bus_putchar(byte[@sidbuffer+14])
 
   bus_putchar(byte[@sidbuffer+24])                      'volume
+
+PRI sid_beep | n
+    sid1.setVolume($0F)
+    sid2.setVolume($0F)
+    n := bus_getchar
+    if n==0                                     'normaler beep
+       sid1.play(0,7500,16,0,0,15,5)
+       sid2.play(0,7500,16,0,0,15,5)
+       waitcnt(cnt + 10_000_000)
+       sid1.noteOff(0)
+       sid2.noteOff(0)
+       sid1.play(0,11500,16,0,0,15,5)
+       sid2.play(0,11500,16,0,0,15,5)
+       waitcnt(cnt + 10_000_000)
+       sid1.noteOff(0)
+       sid2.noteOff(0)
+    else                                        'beep mit bestimmter tonhoehe
+       sid1.play(0,note2freq(n),16,0,0,15,5)
+       sid2.play(0,note2freq(n),16,0,0,15,5)
+       waitcnt(cnt + 1_000_000)
+       sid1.noteOff(0)
+       sid2.noteOff(0)
+
+PRI note2freq(note) | octave
+    octave := note/12
+    note -= octave*12
+    return (noteTable[note]>>(8-octave))
 
 CON ''------------------------------------------------- End of SID FUNCTIONS
 
@@ -2239,6 +2389,75 @@ PRI dcf_getYear
 CON ''------------------------------------------------- End of DCF77 FUNCTIONS
 
 #endif ' __ADM_DCF
+
+CON ''-------------------------------------------------  PLX-Funktionen
+
+#ifdef __ADM_PLX
+
+PRI plx_in | addr                                        'port einlesen
+
+    addr := bus_getchar
+    bus_putchar(plx.in(addr))
+
+PRI plx_out | addr, data                                 'port ausgeben
+
+    addr := bus_getchar
+    data := bus_getchar
+    plx.halt
+    plx.out(addr,data)
+    plx.run
+
+PRI plx_ch | addr, chan                                 'ad-wandler auslesen
+
+    addr := bus_getchar
+    chan := bus_getchar
+    plx.ad_ch(addr,chan)
+
+PRI plx_getReg | reg                                    'poller-register lesen
+
+    reg := bus_getchar
+    bus_putchar(plx.getreg(reg))
+
+PRI plx_setReg | reg, data                              'poller-register setzen
+
+    reg := bus_getchar
+    data := bus_getchar
+    plx.setreg(reg,data)
+
+PRI plx_write | data, ack                               'i2c byte senden
+
+    data := bus_getchar
+    ack:=plx.write(data)
+    bus_putchar(ack)
+
+PRI plx_read | ack, data                                'i2c byte empfangen
+
+    ack := bus_getchar                                  'ack-bit
+    data:=plx.read(ack)
+    bus_putchar(data)
+
+PRI plx_ping | addr                                     'abfrage ob device vorhanden ist
+
+    addr := bus_getchar
+    bus_putchar(plx.ping(addr))
+
+PRI plx_setAddr | adda, ports                           'adressen adda/ports für poller setzen
+
+    adda := bus_getchar                                 'address adda
+    ports := bus_getchar                                'address ports
+    plx.setadr(adda,ports)
+
+PRI joy_get | reg                                       'Joystick abfragen (1 x 8bit Port)
+
+    reg:=bus_getchar                                    '0-6
+    if reg>3 and reg<7
+       bus_putchar(!plx.getreg(reg))
+    else
+       bus_putchar(plx.getreg(reg))
+
+CON ''------------------------------------------------- End of DCF77 FUNCTIONS
+
+#endif '__ADM_PLX
 
 CON ''------------------------------------------------- LAN-FUNKTIONEN
 
