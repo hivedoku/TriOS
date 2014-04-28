@@ -44,6 +44,7 @@ CON 'Signaldefinitionen --------------------------------------------------------
 
 #8,     A_SOUNDL,A_SOUNDR                             'sound (stereo 2 pin)
 #10,    A_SDD0,A_SDCLK,A_SDCMD,A_SDD3                 'sd-cardreader (4 pin)
+#21,    A_Bluetooth_Line                              'Key-Line des HC05-Bluetooth-Moduls
 #23,    A_SELECT                                      'administra-auswahlsignal
 
 CON 'KEY_CODES -------------------------------------------------------------------------------------
@@ -82,16 +83,18 @@ KEY_F12         = 219
 
 CON 'ADMINISTRA-FUNKTIONEN --------------------------------------------------------------------------
 
-'                                          +----------- ays
-'                                          |+---------- com
-'                                          || +-------- plexbus
-'                                          || |+------- rtc
-'                                          || ||+------ lan
-'                                          || |||+----- sid
-'                                          || ||||+---- wav
-'                                          || |||||+--- hss
-'                                          || ||||||+-- chiploader
-'                                          || |||||||+- dateisystem
+'                                        +------------- bluetooth
+'                                        |+------------ dfc77 receiver
+'                                        ||+----------- ays
+'                                        |||+---------- com
+'                                        |||| +-------- plexbus
+'                                        |||| |+------- rtc
+'                                        |||| ||+------ lan
+'                                        |||| |||+----- sid
+'                                        |||| ||||+---- wav
+'                                        |||| |||||+--- hss
+'                                        |||| ||||||+-- chiploader
+'                                        |||| |||||||+- dateisystem
 A_FAT           = %00000000_00000000_00000000_00000001
 A_LDR           = %00000000_00000000_00000000_00000010
 A_HSS           = %00000000_00000000_00000000_00000100
@@ -102,6 +105,8 @@ A_RTC           = %00000000_00000000_00000000_01000000
 A_PLX           = %00000000_00000000_00000000_10000000
 A_COM           = %00000000_00000000_00000001_00000000
 A_AYS           = %00000000_00000000_00000010_00000000
+A_DCF           = %00000000_00000000_00000100_00000000
+A_BLT           = %00000000_00000000_00001000_00000000
 '                                  |
 '                                  ym
 
@@ -141,10 +146,15 @@ A_AYS           = %00000000_00000000_00000010_00000000
 '       ----------------------------------------------  COM-FUNKTIONEN
 #31,    a_comInit
         a_comTx
-        a_comRx                 '33
+        a_comRx                  '33
+
+'       ----------------------------------------------  Bluetooth-Funktionen
+#35,    a_bltCommand_On
+        a_bltCommand_Off         '36
 
 '       ----------------------------------------------  RTC-FUNKTIONEN
-#41,    a_rtcGetSeconds                                 'Returns the current second (0 - 59) from the real time clock.
+#40,    a_rtcTest                                       'Test if RTC Chip is available
+        a_rtcGetSeconds                                 'Returns the current second (0 - 59) from the real time clock.
         a_rtcGetMinutes                                 'Returns the current minute (0 - 59) from the real time clock.
         a_rtcGetHours                                   'Returns the current hour (0 - 23) from the real time clock.
         a_rtcGetDay                                     'Returns the current day (1 - 7) from the real time clock.
@@ -162,10 +172,30 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_rtcGetNVSRAM                                  'Gets the selected NVSRAM value at the index (0 - 55).
         a_rtcPauseForSec                                'Pauses execution for a number of seconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of seconds to pause for between 0 and 2,147,483,647.
         a_rtcPauseForMSec                               'Pauses execution for a number of milliseconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of milliseconds to pause for between 0 and 2,147,483,647.
-        a_rtcTest         '59                           'Test if RTC Chip is available
+        a_rtcGetTime      '59                           'Returns the current hour, minute and second from the real time clock.
+
+'       ----------------------------------------------  DCF77-FUNKTIONEN
+#60,    a_dcfGetInSync                                  'Sync-Status senden
+        a_dcfUpdateRTC                                  'RTC Synchronisieren
+        a_dcfGetBitError
+        a_dcfGetDataCount
+        a_dcfGetBitNumber
+        a_dcfGetBitLevel
+        a_dcfGetTimeZone
+        a_dcfGetActiveSet
+        a_dcfStart                                      'DCF-Empfang starten
+        a_dcfStop                                       'DCF-Empfang stoppen
+        a_dcfState                                      'Status des DCF-Empfängers
+        a_dcfGetSeconds
+        a_dcfGetMinutes
+        a_dcfGetHours
+        a_dcfGetWeekDay
+        a_dcfGetDay
+        a_dcfGetMonth
+        a_dcfGetYear      '77
 
 '       ----------------------------------------------  LAN-FUNKTIONEN
-#71,    a_lanStart                                      'Start Network
+#81,    a_lanStart                                      'Start Network
         a_lanStop                                       'Stop Network
         a_lanConnect                                    'ausgehende TCP-Verbindung öffnen
         a_lanListen                                     'auf eingehende TCP-Verbindung lauschen
@@ -175,7 +205,7 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_lanRXData                                     'Daten aus Empfangspuffer lesen
         a_lanTXData                                     'Daten senden
         a_lanRXByte                                     'wenn vorhanden, Byte aus Empfangspuffer lesen
-        a_lanIsConnected '81                            'TRUE, wenn Socket verbunden, sonst FALSE
+        a_lanIsConnected '91                            'TRUE, wenn Socket verbunden, sonst FALSE
 
 '       ----------------------------------------------  CHIP-MANAGMENT
 #92,    a_mgrSetSound                                   'soundsubsysteme verwalten
@@ -200,6 +230,27 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_sfxKeyOff
         a_sfxStop               '110
 
+'       ----------------------------------------------  PLX-Funktionen
+#120,   a_plxRun                                        'plx-bus freigeben
+        a_plxHalt                                       'plx-bus anfordern
+        a_plxIn                                         'port einlesen
+        a_plxOut                                        'port ausgeben
+        a_plxCh                                         'ad-wandler auslesen
+        a_plxGetReg                                     'poller-register lesen
+        a_plxSetReg                                     'poller-register setzen
+        a_plxStart                                      'i2c-dialog starten
+        a_plxStop                                       'i2c-dialog beenden
+        a_plxWrite                                      'i2c byte senden
+        a_plxRead                                       'i2c byte empfangen
+        a_plxPing                                       'abfrage ob device vorhanden ist
+        a_plxSetAdr                                     'adressen adda/ports für poller setzen
+'       ----------------------------------------------  GAMEDEVICES
+        a_Joy                                           'Joystick abfragen (1 x 8bit Port)
+        a_Paddle                                        'Paddle abfragen (1 x 8bit Port 1 x Analog)
+        a_Pad                                           'Pad abfragen (1 x 8bit Port 2 x Analog)
+        a_SetJoy                                        'Port für Joystick setzen
+        a_SetPad                '137                    'Chan für Pad setzen
+
 '       ----------------------------------------------  WAV-FUNKTIONEN
 #150,   a_sdwStart                                      'spielt wav-datei direkt von sd-card ab
         a_sdwStop                                       'stopt wav-cog
@@ -208,11 +259,6 @@ A_AYS           = %00000000_00000000_00000010_00000000
         a_sdwRightVol                                   'lautstärke rechts
         a_sdwPause                                      'player pause/weiter-modus
         a_sdwPosition           '156
-
-'       ----------------------------------------------  AY-SOUNDFUNKTIONEN
-#200,   a_ayStart
-        a_ayStop
-        a_ayUpdateRegisters
 
 '       ----------------------------------------------  SIDCog: DMP-Player-Funktionen (SIDCog2)
 #157,   a_s_mdmpplay                               'dmp-file mono auf sid2 abspielen
@@ -261,6 +307,11 @@ A_AYS           = %00000000_00000000_00000010_00000000
 
 '       ----------------------------------------------  Zusatzfunktionen
         a_s_dmpreg    '196                              'soundinformationen senden
+
+'       ----------------------------------------------  AY-SOUNDFUNKTIONEN
+#200,   a_ayStart
+        a_ayStop
+        a_ayUpdateRegisters
 
 CON 'BELLATRIX-FUNKTIONEN --------------------------------------------------------------------------
 

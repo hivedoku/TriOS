@@ -1,131 +1,272 @@
-''*******************************************************************
-''*  Simple Asynchronous Serial Driver v1.3                         *
-''*  Authors: Chip Gracey, Phil Pilgrim, Jon Williams, Jeff Martin  *
-''*  Copyright (c) 2006 Parallax, Inc.                              *
-''*  See end of file for terms of use.                              *
-''*******************************************************************
-''
-'' Performs asynchronous serial input/output at low baud rates (~19.2K or lower) using high-level code
-'' in a blocking fashion (ie: single-cog (serial-process) rather than multi-cog (parallel-process)).
-''
-'' To perform asynchronous serial communication as a parallel process, use the FullDuplexSerial object instead.
-'' 
-''
-'' v1.3 - May 7, 2009    - Updated by Jeff Martin to fix rx method bug, noted by Mike Green and others, where uninitialized
-''                         variable would mangle received byte.
-'' v1.2 - March 26, 2008 - Updated by Jeff Martin to conform to Propeller object initialization standards and compress by 11 longs.
-'' v1.1 - April 29, 2006 - Updated by Jon Williams for consistency.
-''
-''
-'' The init method MUST be called before the first use of this object.
-'' Optionally call finalize after final use to release transmit pin.
-''
-'' Tested to 19.2 kbaud with clkfreq of 80 MHz (5 MHz crystal, 16x PLL)
+{{
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Autor: Ingo Kripahle                                                                                 │
+│ Copyright (c) 2010 Ingo Kripahle                                                                     │
+│ See end of file for terms of use.                                                                    │
+│ Die Nutzungsbedingungen befinden sich am Ende der Datei                                              │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Informationen   : hive-project.de
+Kontakt         : drohne235@gmail.com
+System          : mental
+Name            : I2C/PlexBus-Objekt
+Chip            : Administra
+Typ             :
+
+Funktion        :
+
+
+COG's           :
+
+Logbuch         :
+
+
+Notizen         :
+
+}}
+
+
+
+OBJ
+  gc    : "m-glob-con"
+
+
+CON
+
+  SCL   = gc#adm_scl
+  SDA   = gc#adm_sda
+'  VNX   = gc#adm_int1
+' portadressen sepia
+
+  'pcf8574  %0100_ABC_0
+  PORT1 =   %0100_000   '$20
+  PORT2 =   %0100_001   '$21
+  PORT3 =   %0100_010   '$22
+{
+  'pcf8574a %0111_ABC_0
+  PORT1 =   %0111_000   '$38
+  PORT2 =   %0111_001   '$39
+  PORT3 =   %0111_010   '$3A
+}
+' ad/da-wandler-adresse
+
+  'pcf8591     %1001_ABC_R
+  ADDA0      = %1001_000
+  ADDA0_WR   = %1001_000_0
+  ADDA0_RD   = %1001_000_1
+
+'
+'               +------------- 0
+'               | +----------- 1 = analog output enable
+'               | |  +-------- 00 - four single endet input
+'               | |  |         01 - three differential inputs
+'               | |  |         10 - single ended and differential mixed
+'               | |  |         11 - two differential inputs
+'               | |  | +------ 0
+'               | |  | | +---- 1 = auto-increment
+'               | |  | | |  +- 00 - channel 0
+'               | |  | | |  |  01 - channel 1
+'               | |  | | |  |  10 - channel 2
+'               | |  | | |  |  11 - channel 3
+'               | | -+ | | -+
+  ADDA0_INIT = %0_1_00_0_0_00
+  ADDA0_SCAN = %0_1_00_0_1_00
+  ADDA0_CH0  = %0_1_00_0_0_00
+  ADDA0_CH1  = %0_1_00_0_0_01
+  ADDA0_CH2  = %0_1_00_0_0_10
+  ADDA0_CH3  = %0_1_00_0_0_11
+
+' index der register
+  R_PAD0        = 0
+  R_PAD1        = 1
+  R_PAD2        = 2
+  R_PAD3        = 3
+  R_INP0        = 4
+  R_INP1        = 5
+  R_INP2        = 6
+'  R_VNX         = 7
 
 
 VAR
 
-  long  sin, sout, inverted, bitTime, rxOkay, txOkay   
+  byte  joy0
+  byte  pad0
 
+  byte  plxreg[16]
+  long  plxstack[16]
+  long  plxcogid
 
-PUB init(rxPin, txPin, baud): Okay
-{{Call this method before first use of object to initialize pins and baud rate.
+  byte  plxback
+  byte  plxlock
 
-  • For true mode (start bit = 0), use positive baud value.     Ex: serial.init(0, 1, 9600)
-    For inverted mode (start bit = 1), use negative baud value. Ex: serial.init(0, 1, -9600) 
-  • Specify -1 for "unused" rxPin or txPin if only one-way communication desired.
-  • Specify same value for rxPin and txPin for bi-directional communication on that pin and connect a pull-up/pull-down resistor
-    to that pin (depending on true/inverted mode) since pin will set it to hi-z (input) at the end of transmission to avoid
-    electrical conflicts.  See "Same-Pin (Bi-Directional)" examples, below.
+  byte  adr_adda      'adresse adda (poller)
+  byte  adr_port      'adresse ports (poller)
 
-  EXAMPLES:
-  
-    Standard Two-Pin Bi-Directional True/Inverted Modes                Standard One-Pin Uni-Directional True/Inverted Mode
-                Ex: serial.init(0, 1, ±9600)                      Ex: serial.init(0, -1, ±9600)  -or-  serial.init(-1, 0, ±9600)            
-         ┌────────────┐               ┌──────────┐                          ┌────────────┐               ┌──────────┐     
-         │Propeller P0├─────────────┤I/O Device│                          │Propeller P0├───────────────┤I/O Device│     
-         │          P1├─────────────┤          │                          └────────────┘               └──────────┘   
-         └────────────┘               └──────────┘                           
+PUB init                                                'plx: io-system initialisieren
 
-         
+  outa[SCL] := 1                'SCL = 1
+  dira[SCL] := 1                'SCL = ausgang
+  dira[SDA] := 0                'SDA = eingang
 
-            Same-Pin (Bi-Directional) True Mode                              Same-Pin (Bi-Directional) Inverted Mode   
-                Ex: serial.init(0, 0, 9600)                                       Ex: serial.init(0, 0, -9600)       
-                                                                           ┌────────────┐               ┌──────────┐                                         
-                              │                                             │Propeller P0├─────┳─────┤I/O Device│                                         
-                               4.7 kΩ                                      └────────────┘       │       └──────────┘                                         
-         ┌────────────┐       │       ┌──────────┐                                                4.7 kΩ            
-         │Propeller P0├─────┻─────┤I/O Device│                                               │                   
-         └────────────┘               └──────────┘                                                                  
-}}                                                                  
+  adr_adda := ADDA0
+  adr_port := PORT1
 
-  finalize                                              ' clean-up if restart
-  
-  rxOkay := rxPin > -1                                  ' receiving?
-  txOkay := txPin > -1                                  ' transmitting?
+  'ad/da-wandler initialisieren
+  ad_init(ADDA0)
 
-  sin := rxPin & $1F                                    ' set rx pin
-  sout := txPin & $1F                                   ' set tx pin
+  'semaphore anfordern
+  'plxlock := 2                  'mental
+  plxlock := locknew           'trios
 
-  inverted := baud < 0                                  ' set inverted flag
-  bitTime := clkfreq / ||baud                           ' calculate serial bit time  
-  
-  return rxOkay | TxOkay
-  
+  'pollcog starten
+  plxcogid := cognew(poller,@plxstack)
+pub plxstop
 
-PUB finalize
-{{Call this method after final use of object to release transmit pin.}}
- 
-  if txOkay                                             ' if tx enabled
-    dira[sout]~                                         '   float tx pin
-  rxOkay := txOkay := false
+   if(plxcogid)
+     cogstop(plxcogid~ - 1)
+     lockret(-1 + plxlock~)
+PRI poller                                              'plx: pollcog
 
+  repeat
+    'semaphore setzen
+    repeat until not lockset(plxlock) 'auf freien bus warten
 
-PUB rx: rxByte | t
-{{ Receive a byte; blocks caller until byte received. }}
+    'analoge eingänge pollen
+    plxreg[R_PAD0] := ad_ch(adr_adda,0)
+    plxreg[R_PAD1] := ad_ch(adr_adda,1)
+    lockclr(plxlock)            'bus freigeben
 
-  if rxOkay
-    dira[sin]~                                          ' make rx pin an input
-    waitpeq(inverted & |< sin, |< sin, 0)               ' wait for start bit
-    t := cnt + bitTime >> 1                             ' sync + 1/2 bit
-    repeat 8
-      waitcnt(t += bitTime)                             ' wait for middle of bit
-      rxByte := ina[sin] << 7 | rxByte >> 1             ' sample bit 
-    waitcnt(t + bitTime)                                ' allow for stop bit 
+    repeat until not lockset(plxlock) 'auf freien bus warten
+    plxreg[R_PAD2] := ad_ch(adr_adda,2)
+    plxreg[R_PAD3] := ad_ch(adr_adda,3)
+    lockclr(plxlock)            'bus freigeben
 
-    rxByte := (rxByte ^ inverted) & $FF                 ' adjust for mode and strip off high bits
+    repeat until not lockset(plxlock) 'auf freien bus warten
+    'digitale eingabeports pollen
+    plxreg[R_INP0] := in(adr_port  )
+    plxreg[R_INP1] := in(adr_port+1)
+    plxreg[R_INP2] := in(adr_port+2)
+    'semaphore freigeben
+    lockclr(plxlock)            'bus freigeben
 
+PUB run                                                 'plx: polling aktivieren
 
-PUB tx(txByte) | t
-{{ Transmit a byte; blocks caller until byte transmitted. }}
+  lockclr(plxlock)            'bus freigeben
 
-  if txOkay
-    outa[sout] := !inverted                             ' set idle state
-    dira[sout]~~                                        ' make tx pin an output        
-    txByte := ((txByte | $100) << 2) ^ inverted         ' add stop bit, set mode 
-    t := cnt                                            ' sync
-    repeat 10                                           ' start + eight data bits + stop
-      waitcnt(t += bitTime)                             ' wait bit time
-      outa[sout] := (txByte >>= 1) & 1                  ' output bit (true mode)  
-    
-    if sout == sin
-      dira[sout]~                                       ' release to pull-up/pull-down
+PUB halt                                                'plx: polling stoppen
 
-    
-PUB str(strAddr)
-{{ Transmit z-string at strAddr; blocks caller until string transmitted. }}
+  repeat until not lockset(plxlock) 'auf freien bus warten
 
-  if txOkay
-    repeat strsize(strAddr)                             ' for each character in string
-      tx(byte[strAddr++])                               '   write the character
+CON                                                     'Devices: PORTS, AD/DA-WANDLER
+
+PUB in(adr):data | ack                                  'plx: port lesen
+
+  start
+  ack := write((adr << 1) + 1)
+  ifnot ack
+    data := read(0)
+  stop
+
+PUB out(adr,data):ack                                   'plx: port schreiben
+
+  start
+  ack := write(adr << 1)
+  ack := (ack << 1) | write(data)
+  stop
+
+PUB ad_init(adr)                                        'plx: ad-wandler initialisieren
+
+  start
+  write(adr << 1)
+  write(ADDA0_INIT)
+  write(0)
+  stop
+
+PUB ad_ch(adr,ch): wert                                 'plx: ad-wandler wert auslesen
+
+  start
+  write(adr << 1)
+  write(ADDA0_CH0 + ch)
+  write(0)
+  stop
+  repeat 2                      'erste messung verwerfen!
+    start                       'da diese das ergebnis
+    write((adr << 1) + 1)       'der letzten messung
+    wert := read(1)             'liefert!
+    stop
+
+PUB getreg(regnr):wert                                  'plx: register lesen
+
+  wert := plxreg[regnr & $0F]
+
+PUB setreg(regnr,wert)                                  'plx: register schreiben
+
+  plxreg[regnr & $0F] := wert
+
+PUB ping(adr):ack                                       'plx: device anpingen
+
+  start
+  ack := write(adr<<1)
+  stop
+
+PUB setadr(adradda,adrport)
+
+  'halt
+  adr_adda := adradda
+  adr_port := adrport
+  ad_init(adr_adda)
+  'run
+
+CON                                                     'I2C-FUNKTIONEN
+
+PUB start                                               'i2c: dialog starten
+
+   outa[SCL]~~
+   dira[SCL]~~
+   outa[SDA]~~
+   dira[SDA]~~
+   outa[SDA]~
+   outa[SCL]~
+
+PUB stop                                                'i2c: dialog beenden
+   outa[SCL]~~
+   outa[SDA]~~
+   dira[SCL]~
+   dira[SDA]~
+
+PUB write(data):ack                                     'i2c: byte senden
+
+   ack := 0
+   data <<= 24
+   repeat 8
+      outa[SDA] := (data <-= 1) & 1
+      outa[SCL]~~
+      outa[SCL]~
+   dira[SDA]~
+   outa[SCL]~~
+   ack := ina[SDA]
+   outa[SCL]~
+   outa[SDA]~
+   dira[SDA]~~
+
+PUB read(ack):data                                      'i2c: byte empfangen
+
+   dira[SDA]~
+   repeat 8
+      outa[SCL]~~
+      data := (data << 1) | ina[SDA]
+      outa[SCL]~
+   outa[SDA] := ack
+   dira[SDA]~~
+   outa[SCL]~~
+   outa[SCL]~
+   outa[SDA]~
 
 {{
-
-
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                   TERMS OF USE: MIT License                                                  │                                                            
+│                                                   TERMS OF USE: MIT License                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    │ 
+│Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    │
 │files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy,    │
 │modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software│
 │is furnished to do so, subject to the following conditions:                                                                   │
@@ -137,4 +278,5 @@ PUB str(strAddr)
 │COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   │
 │ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-}}       
+}}
+

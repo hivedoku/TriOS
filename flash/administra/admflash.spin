@@ -80,6 +80,7 @@ COG's           : MANAGMENT     1 COG
                   SIDCog's      2 COG's
                   DMP/Tracker   1 COG   (dynamisch)
                   NET           2 COG
+                  DCF receiver  1 COG
 
 Defines         : __ADM_FAT      enable FAT engine (sd card handling)
                   __ADM_HSS      enable HSS synthesizer
@@ -89,6 +90,8 @@ Defines         : __ADM_FAT      enable FAT engine (sd card handling)
                   __ADM_LAN      enable LAN functions
                   __ADM_RTC      enable RTC functions (FAT engine inherits it also)
                   __ADM_PLX      enable plexbus
+                  __ADM_DCF      enable DCF77 receiver
+                  __ADM_BLT      enable Bluetooth
                   __ADM_COM      enable serial port
                   __ADM_AYS      enable AYS player
 
@@ -159,17 +162,20 @@ Notizen         :
 CON
 
 ''default defines (please anable to compile from GUI)
-'#define __ADM_FAT
+#define __ADM_FAT
 '#define __ADM_HSS
 '#define __ADM_HSS_PLAY
 '#define __ADM_WAV
-'#define __ADM_RTC
+#define __ADM_RTC
 '#define __ADM_COM
 
 ''other defines
 '#define __ADM_LAN
-'#define __ADM_SID
+#define __ADM_SID
 '#define __ADM_AYS
+#define __ADM_PLX
+#define __ADM_DCF
+#define __ADM_BLT
 
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
@@ -243,7 +249,19 @@ CHIP_SPEC_AYS = gc#A_AYS
 CHIP_SPEC_AYS = 0
 #endif
 
-CHIP_SPEC = CHIP_SPEC_FAT|CHIP_SPEC_LDR|CHIP_SPEC_HSS|CHIP_SPEC_WAV|CHIP_SPEC_SID|CHIP_SPEC_LAN|CHIP_SPEC_RTC|CHIP_SPEC_PLX|CHIP_SPEC_COM|CHIP_SPEC_AYS
+#ifdef __ADM_DCF
+CHIP_SPEC_DCF = gc#A_DCF
+#else
+CHIP_SPEC_DCF = 0
+#endif
+
+#ifdef __ADM_BLT
+CHIP_SPEC_BLT = gc#A_BLT
+#else
+CHIP_SPEC_BLT = 0
+#endif
+
+CHIP_SPEC = CHIP_SPEC_FAT|CHIP_SPEC_LDR|CHIP_SPEC_HSS|CHIP_SPEC_WAV|CHIP_SPEC_SID|CHIP_SPEC_LAN|CHIP_SPEC_RTC|CHIP_SPEC_PLX|CHIP_SPEC_COM|CHIP_SPEC_AYS|CHIP_SPEC_DCF|CHIP_SPEC_BLT
 '
 '          hbeat   --------+
 '          clk     -------+|
@@ -330,6 +348,12 @@ OBJ
   sock            : "driver_socket"  'LAN
   num             : "glob-numbers"   'Number Engine
 #endif
+#ifdef __ADM_PLX
+  com             : "adm-plx"        'PlexBux
+#endif
+#ifdef __ADM_DCF
+  dcf             : "adm-dcf"        'DCF-77
+#endif
 
   gc              : "glob-con"       'globale konstanten
 
@@ -339,6 +363,9 @@ VAR
   byte  tbuf2[20]
   byte  fl_syssnd                                       '1 = systemtöne an
   byte  st_sound                                        '0 = aus, 1 = hss, 2 = wav
+#ifdef __ADM_DCF
+  byte  dcfon                                           'DCF-Betriebsmerker
+#endif
 
 CON ''------------------------------------------------- ADMINISTRA
 
@@ -350,6 +377,12 @@ PUB main | cmd,err                                      'chip: kommandointerpret
 
   init_chip                                             'bus/vga/keyboard/maus initialisieren
   repeat
+#ifdef __ADM_DCF
+    if dcfon
+       if dcf.GetInSync==1
+          if dcf.GetBitNumber==59                       'Zeittelegramm gültig?, dann RTC synchronisieren (jedes gültige Telegramm)
+              dcf_updateRTC
+#endif '__ADM_DCF
     cmd := bus_getchar                                  'kommandocode empfangen
     err := 0
     case cmd
@@ -396,8 +429,15 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_comRx: com_rx
 #endif '__ADM_COM
 
+'       ----------------------------------------------  Bluetooth-FUNKTIONEN
+#ifdef __ADM_BLT
+        gc#a_bltCommand_On: blt_setCommandMode
+        gc#a_bltCommand_Off: blt_setNormalMode
+#endif '__ADM_BLT
+
 '       ----------------------------------------------  RTC-FUNKTIONEN
 #ifdef __ADM_RTC
+        gc#a_rtcTest: rtc_test                          'Test if RTC Chip is available
         gc#a_rtcGetSeconds: rtc_getSeconds              'Returns the current second (0 - 59) from the real time clock.
         gc#a_rtcGetMinutes: rtc_getMinutes              'Returns the current minute (0 - 59) from the real time clock.
         gc#a_rtcGetHours: rtc_getHours                  'Returns the current hour (0 - 23) from the real time clock.
@@ -416,8 +456,30 @@ PUB main | cmd,err                                      'chip: kommandointerpret
         gc#a_rtcGetNVSRAM: rtc_getNVSRAM                'Gets the selected NVSRAM value at the index (0 - 55).
         gc#a_rtcPauseForSec: rtc_pauseForSeconds        'Pauses execution for a number of seconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of seconds to pause for between 0 and 2,147,483,647.
         gc#a_rtcPauseForMSec: rtc_pauseForMilliseconds  'Pauses execution for a number of milliseconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of milliseconds to pause for between 0 and 2,147,483,647.
-        gc#a_rtcTest: rtc_test                          'Test if RTC Chip is available
+        gc#a_rtcGetTime: rtc_getTime                    'Returns the current hour, minute and second from the real time clock.
 #endif '__ADM_RTC
+
+'       ----------------------------------------------  DCF77-FUNKTIONEN
+#ifdef __ADM_DCF
+        gc#a_dcfGetInSync: dcf_getInSync                'Sync-Status senden
+        gc#a_dcfUpdateRTC: dcf_updateRTC                'RTC Synchronisieren
+        gc#a_dcfGetBitError: dcf_getBitError
+        gc#a_dcfGetDataCount: dcf_getDataCount
+        gc#a_dcfGetBitNumber: dcf_getBitNumber
+        gc#a_dcfGetBitLevel: dcf_getBitLevel
+        gc#a_dcfGetTimeZone: dcf_getTimeZone
+        gc#a_dcfGetActiveSet: dcf_getActiveSet
+        gc#a_dcfStart: dcf_start                        'DCF-Empfang starten
+        gc#a_dcfStop: dcf_stop                          'DCF-Empfang stoppen
+        gc#a_dcfState: dcf_state                        'Status des DCF-Empfängers
+        gc#a_dcfGetSeconds: dcf_getSeconds
+        gc#a_dcfGetMinutes: dcf_getMinutes
+        gc#a_dcfGetHours: dcf_getHours
+        gc#a_dcfGetWeekDay: dcf_getWeekDay
+        gc#a_dcfGetDay: dcf_getDay
+        gc#a_dcfGetMonth: dcf_getMonth
+        gc#a_dcfGetYear: dcf_getYear
+#endif '__ADM_DCF
 
 '       ----------------------------------------------  LAN-FUNKTIONEN
 #ifdef __ADM_LAN
@@ -593,13 +655,18 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
 #ifdef __ADM_COM
   'serielle schnittstelle starten
   com_baud := 9600
-  com.start(gc#SER_RX,gc#SER_TX,0,com_baud)             ' start the default serial interface
+  com.start(gc#SER_RX,gc#SER_TX,0,com_baud)             'start the default serial interface
 #endif '__ADM_COM
 
 #ifdef __ADM_LAN
   'LAN
   lan_started := false                                  'LAN noch nicht gestartet
 #endif '__ADM_LAN
+
+#ifdef __ADM_DCF
+  'DCF-77
+  dcfon:=0
+#endif '__ADM_DCF
 
 PRI bus_putchar(zeichen)                                'chip: ein byte über bus ausgeben
 ''funktionsgruppe               : chip
@@ -1398,6 +1465,22 @@ CON ''------------------------------------------------- End of COM FUNCTIONS
 
 #endif ' __ADM_COM
 
+CON ''------------------------------------------------- Bluetooth FUNCTIONS
+
+#ifdef __ADM_BLT
+
+PRI blt_setCommandMode
+    dira[gc#A_Bluetooth_Line]:=1
+    outa[gc#A_Bluetooth_Line]:=1
+
+PRI blt_setNormalMode
+    outa[gc#A_Bluetooth_Line]:=0
+    dira[gc#A_Bluetooth_Line]:=0
+
+CON ''------------------------------------------------- End of Bluetooth FUNCTIONS
+
+#endif ' __ADM_BLT
+
 CON ''------------------------------------------------- HSS-FUNKTIONEN
 
 #ifdef __ADM_HSS
@@ -2055,9 +2138,107 @@ PRI rtc_test                                            'rtc: Test if RTC Chip i
 ''                              : Returns TRUE if RTC is available, otherwise FALSE
     bus_putchar(probeRTC)
 
+PRI rtc_getTime
+
+    sub_putlong(rtc.getHours)
+    sub_putlong(rtc.getMinutes)
+    sub_putlong(rtc.getSeconds)
+
 CON ''------------------------------------------------- End of RTC FUNCTIONS
 
 #endif ' __ADM_RTC
+
+CON ''------------------------------------------------- DCF77-FUNKTIONEN
+
+#ifdef __ADM_DCF
+
+VAR
+
+PRI dcf_getInSync                                       'dcf: Sync-Status senden
+
+    bus_putchar(dcf.GetInSync)
+
+PRI dcf_updateRTC                                       'dcf: RTC Synchronisieren
+
+#ifdef __ADM_RTC
+    rtc.setHours(dcf.GetHours)
+    rtc.setMinutes(dcf.GetMinutes)
+    rtc.setSeconds(dcf.GetSeconds)
+    rtc.setYear(dcf.GetYear)
+    rtc.setMonth(dcf.GetMonth)
+    rtc.setDate(dcf.GetDay)
+    rtc.setDay(dcf.GetWeekDay)
+#endif ' __ADM_RTC
+
+PRI dcf_getBitError
+
+    bus_putchar(dcf.GetBitError)
+
+PRI dcf_getDataCount
+
+    bus_putchar(dcf.GetDatacount)
+
+PRI dcf_getBitNumber
+
+    bus_putchar(dcf.GetBitNumber)
+
+PRI dcf_getBitLevel
+
+    bus_putchar(dcf.GetBitLevel)
+
+PRI dcf_getTimeZone
+
+    bus_putchar(dcf.GetTimeZone)
+
+PRI dcf_getActiveSet
+
+    bus_putchar(dcf.GetActiveSet)
+
+PRI dcf_start                                           'dcf: DCF-Empfang starten
+
+    dcf.start
+    dcfon:=1
+
+PRI dcf_stop                                            'dcf: DCF-Empfang stoppen
+
+    dcf.stop
+    dcfon:=0
+
+PRI dcf_state                                           'dcf: Status des DCF-Empfängers
+
+    bus_putchar(dcfon)
+
+PRI dcf_getSeconds
+
+    bus_putchar(dcf.GetSeconds)
+
+PRI dcf_getMinutes
+
+    bus_putchar(dcf.GetMinutes)
+
+PRI dcf_getHours
+
+    bus_putchar(dcf.GetHours)
+
+PRI dcf_getWeekDay
+
+    bus_putchar(dcf.GetWeekDay)
+
+PRI dcf_getDay
+
+    bus_putchar(dcf.GetDay)
+
+PRI dcf_getMonth
+
+    bus_putchar(dcf.GetMonth)
+
+PRI dcf_getYear
+
+    sub_putword(dcf.GetYear)
+
+CON ''------------------------------------------------- End of DCF77 FUNCTIONS
+
+#endif ' __ADM_DCF
 
 CON ''------------------------------------------------- LAN-FUNKTIONEN
 
