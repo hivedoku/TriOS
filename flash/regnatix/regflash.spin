@@ -56,11 +56,11 @@ word[7] - DCURR - Stack pointer. This is the initial value of the stack pointer.
 
 CON ' KONFIGURATION
 {
-    Achtung: Nur eine Konfiguration wählen!
+    Achtung: Nur eine Konfiguration wählen! Beim Bauen mittels Makefiles keines aktivieren"
 }
 
-'#define forth         ' forth + spin-loader
-#define regime       ' spin-loader OHNE FORTH, reg.sys wird sofort automatisch gestartet
+#define forth        ' forth + spin-loader
+'#define regime       ' spin-loader OHNE FORTH, reg.sys wird sofort automatisch gestartet
 
 CON ' LOADER-KONSTANTEN
 

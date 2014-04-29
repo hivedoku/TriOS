@@ -36,8 +36,11 @@ mv belflash.binary ${sdsys}/vga.bel
 ${BSTC} -L ${libpath} ${D} -D __TV -b -O a flash/bellatrix/belflash.spin
 mv belflash.binary ${sdsys}/tv.bel
 
-${BSTC} -L ${libpath} ${D} -b -O a flash/regnatix/regflash.spin
+${BSTC} -L ${libpath} ${D} -D regime -b -O a flash/regnatix/regflash.spin
 mv regflash.binary ${flash}
+
+${BSTC} -L ${libpath} ${D} -D forth -b -O a flash/regnatix/regflash.spin
+mv regflash.binary ${flash}/regforth.binary
 
 # ----------------------------------------------------------------
 # Startdateie erzeugen
@@ -58,8 +61,6 @@ ${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_AYS -b -O a flash/administra/ad
 mv admflash.binary ${sdsys}/admay.adm
 ${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_HSS -D __ADM_LAN -D __ADM_RTC -D __ADM_COM -b -O a flash/administra/admflash.spin
 mv admflash.binary ${sdsys}/admnet.adm
-${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_FAT_EXT -D __ADM_RTC -D __ADM_SID  -D __ADM_PLX -D __ADM_DCF -D __ADM_BLT -b -O a flash/administra/admflash.spin
-mv admflash.binary ${sdsys}/plexus.adm
 
 ${BSTC} -L ${libpath} ${D} -b -O a system/bellatrix/bel-htext/htext.spin
 mv htext.binary ${sdsys}/htext.bel
