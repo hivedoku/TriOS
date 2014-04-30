@@ -59,7 +59,7 @@ CON ' KONFIGURATION
     Achtung: Nur eine Konfiguration wählen! Beim Bauen mittels Makefiles keines aktivieren"
 }
 
-#define forth        ' forth + spin-loader
+'#define forth        ' forth + spin-loader
 '#define regime       ' spin-loader OHNE FORTH, reg.sys wird sofort automatisch gestartet
 
 CON ' LOADER-KONSTANTEN
