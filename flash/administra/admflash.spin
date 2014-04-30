@@ -295,7 +295,7 @@ playRate        = 50                                    'Hz
 detune          = 1.006
 
 'Netzwerk-Puffergrößen (müssen Vielfaches von 2 sein!)
-rxlen        = 2048
+rxlen        = 2048                                     '[rxlen*sock#sNumSockets] must be 4096 or more (to use buffer for sd copy)!
 txlen        = 128
 
 'index für dmarker
@@ -367,6 +367,12 @@ VAR
   byte  st_sound                                        '0 = aus, 1 = hss, 2 = wav
 #ifdef __ADM_DCF
   byte  dcfon                                           'DCF-Betriebsmerker
+#endif
+
+#ifdef __ADM_LAN
+  byte  bufmain[rxlen*sock#sNumSockets]                 'Buffer for everything ([rxlen*sock#sNumSockets] must be 4096 or more!)
+#elseifdef __ADM_FAT_EXT
+  byte  bufmain[4096]                                   'Buffer for everything (SD copy...)
 #endif
 
 CON ''------------------------------------------------- ADMINISTRA
@@ -1015,91 +1021,64 @@ VAR
   long  dmarker[6]                                      'speicher für dir-marker
 
 #ifdef __ADM_FAT_EXT
-
-  byte  copy_buffer[4002]                               'Kopier-Puffer
-
-PRI sddmact(markernr)
-
-    ifnot dmarker[markernr] == TRUE
-          sdfat.setDirCluster(dmarker[markernr])
-
 PRI sd_dirsize                                          'Anzahl Einträge im aktuellen Verzeichnis
 '    sub_putlong(\sdfat.listSize)
 
 PRI sd_pos
     sub_putlong(sdfat.getCharacterPosition)
 
-PRI sd_copy|laenge,schleife,rest,m,n,i,cpm,psm,e
+PRI sd_copy|laenge,m,n,cpm,psm
     cpm:=sub_getlong                         'verzeichnismarker lesen (quelle)
     psm:=sub_getlong                         'verzeichnismarker lesen (ziel)
     sub_getstr                               'dateiname lesen @tbuff
 
     outa[LED_OPEN]~~                         'LED an
 
-    dmarker[2] := cpm
-    sddmact(2)
+    sdfat.setDirCluster(cpm)                 'Quellverzeichnis öffnen
 
-    \sdfat.openFile(@tbuf, "R")
-    laenge:=\sdfat.listSize
-    \sdfat.closeFile
+    \sdfat.openFile(@tbuf, "R")              'Quelldatei öffnen
+    laenge:=\sdfat.listSize                  'Dateigröße empfangen
+    \sdfat.closeFile                         'Datei schließen
 
-    schleife:=laenge/4000
-    rest:=laenge-(schleife*4000)
 
     m:=0
     n:=0
-    if schleife>0                                      'zu kopierende Datei größer 4001 Bytes?, ansonsten gleich zu Rest springen
-       repeat schleife                                 'Blöcke zu je 4001 Byte kopieren
-              dmarker[2] := cpm
-              sddmact(2)
+       repeat
+       '******************** Quelldatei lesen **********************************************
+              sdfat.setDirCluster(cpm)                  'Quellverzeichnis öffnen
+             \sdfat.openFile(@tbuf, "R")                'Quelldatei öffnen
+             \sdfat.setCharacterPosition(m)             'Position innerhalb der Datei setzen
+             if laenge>4095                             '4kB Daten lesen
+                \sdfat.readData(@bufmain, 4096)
+                m:=\sdfat.getCharacterPosition-1        'Position innerhalb der Datei merken
+             else                                       'Rest lesen
+                \sdfat.readData(@bufmain, laenge)
+             \sdfat.closeFile                           'Datei schließen
+       '******************** Zieldatei schreiben *******************************************
+             sdfat.setDirCluster(psm)                   'Zielverzeichnis öffnen
+             \sdfat.openFile(@tbuf, "W")                'Zieldatei zum schreiben öffnen
+             \sdfat.setCharacterPosition(m)             'Position innerhalb der Datei setzen
+             if laenge>4095                             '4kB Daten schreiben
+                \sdfat.writeData(@bufmain, 4096)
+                n:=\sdfat.getCharacterPosition          'Position merken
+             else
+                \sdfat.writeData(@bufmain,laenge)   'Rest schreiben
+                quit                                    'Ausstieg
+             \sdfat.closeFile                           'Datei schließen
+       '******************** Test auf Abbruch **********************************************
+             if bus_getchar==1                          'Abbruch
+                \sdfat.closeFile                        'Datei schließen
+                sub_putlong(n)                          'Positionswert senden
+                return                                  'Ausstieg
+             sub_putlong(n)                             'Kopierfortschritt zu Regnatix senden
+             laenge-=4095                               '4kB von laenge abziehen
 
-             \sdfat.openFile(@tbuf2, "R")
-             \sdfat.setCharacterPosition(m)
-             \sdfat.readData(@copy_buffer, 4001)
-
-             m:=\sdfat.getCharacterPosition-1
-             \sdfat.closeFile
-             dmarker[2] := psm
-             sddmact(2)
-
-             \sdfat.openFile(@tbuf, "W")
-             \sdfat.setCharacterPosition(m)
-             \sdfat.writeData(@copy_buffer, 4001)
-
-             n:=\sdfat.getCharacterPosition
-             \sdfat.closeFile
-             if bus_getchar==1
-                \sdfat.closeFile
-                sub_putlong(n)
-                return
-             sub_putlong(n)                            'Kopierfortschritt zu Regnatix senden
-
-
-    '************und den Rest kopieren********************
-    dmarker[2] := cpm
-    sddmact(2)
-
-    \sdfat.openFile(@tbuf2, "R")
-    \sdfat.setCharacterPosition(m)
-    \sdfat.readData(@copy_buffer, rest)
-
-'    m:=\sdfat.getCharacterPosition
-    \sdfat.closeFile
-    dmarker[2] := psm
-    sddmact(2)
-
-    \sdfat.openFile(@tbuf, "W")
-    \sdfat.setCharacterPosition(n)
-    \sdfat.writeData(@copy_buffer, rest)
-
-    'n:=\sdfat.getCharacterPosition
-    \sdfat.closeFile
-    sub_putlong(-1)
+    \sdfat.closeFile                                    'Datei schließen
+    sub_putlong(-1)                                     'Aktion beendet senden
 
     outa[LED_OPEN]~                                     'LED aus
 
 #endif '__ADM_FAT_EXT
-
 PRI sd_mount(mode) | err                                'sdcard: sd-card mounten frida
 ''funktionsgruppe               : sdcard
 ''funktion                      : eingelegtes volume mounten
@@ -2470,7 +2449,6 @@ VAR
   long  sockhandle[sock#sNumSockets]                    'Handle für mit sock.connect/sock.listen erstellten Socket
   byte  bufidx[sock#sNumSockets]                        'zum Handle-Index gehörender Puffer-abschnitt
                                                         '(zum Socket mit dem Handle 2 gehört der Pufferabschnitt aus bufidx[2])
-  byte  bufrx[rxlen*sock#sNumSockets]                   'LAN Empfangspuffer
   byte  buftx[txlen*sock#sNumSockets]                   'LAN Sendepuffer
 
 DAT
@@ -2569,7 +2547,7 @@ PRI lan_connect | ipaddr, remoteport, handle, handleidx, i
       quit
     i++
 
-  ifnot (handle := sock.connect(ipaddr, remoteport, @bufrx[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
+  ifnot (handle := sock.connect(ipaddr, remoteport, @bufmain[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
     sock.resetBuffers(handle)
     handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
     sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
@@ -2596,7 +2574,7 @@ PRI lan_listen | port, handle, handleidx, i
       quit
     i++
 
-  ifnot (handle := sock.listen(port, @bufrx[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
+  ifnot (handle := sock.listen(port, @bufmain[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
     handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
     sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
     bufidx[i] :=handleidx
