@@ -6,8 +6,8 @@
 D="-D __LANG_DE"
 
 # Pfade
-##bin="../Bin"
-bin="/home/ftp/hive"
+bin="../Bin"
+##bin="/home/ftp/hive"
 sd="${bin}/sdcard"
 sdsys="${bin}/sdcard/system"
 flash="${bin}/flash"
