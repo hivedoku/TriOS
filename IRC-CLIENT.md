@@ -12,7 +12,7 @@ Einleitung
 ==========
 
 Dies ist ein IRC-Client für den Hive (http://hive-project.de). Er sollte auf
-jedem Hive mit bestücktem Netzwerk-Interface und RTC funktionieren.
+jedem Hive mit bestücktem Netzwerk-Interface funktionieren.
 
 Die Idee des IRC-Clients stammt von PropIRC, einem Projekt von Harrison Pham,
 welches aus einer Propeller-basierten Hardware ausschließlich für diesen Zweck
@@ -27,23 +27,18 @@ Funktionalitäten dar.
 Installation
 ============
 
-Der Hive IRC-Client ist Bestandteil des TriOS Netzwerk-Paketes. Die aktuellste
-Version steht immer im ersten Beitrag des zugehörigen Forum-Threads unter
-http://hive-project.de/board/viewtopic.php?f=7&t=968 zur Verfügung.
-
-Die Installation ist wie im Download-Archiv beschrieben vorzunehmen. Dabei wird
-auch der IRC-Client in das System-Verzeichnis der TriOS SD-Card kopiert und
-kann von dort gestartet werden.
+Der Hive IRC-Client ist Bestandteil von TriOS und wird bei dessen Installation
+ins System-Verzeichnis der SD-Karte installiert.
 
 
-Testserver
-==========
+Empfohlener Server
+==================
 
-Für erste Versuche mit IRC steht ein eigener Server zur Verfügung. Dieser kann
-wie folgt erreicht werden:
+Auf German-Elite existiert ein IRC-Channel für den Hive. Dieser kann wie folgt
+erreicht werden:
 
-  IRC-Server (IP-Adresse:Port): 88.198.147.76:6667
-  nutzbarer Channel:            #Hive
+  IRC-Server (Hostname:Port):   irc.german-elite.net:6667
+  nutzbarer Channel:            #hive
 
 
 Nutzung
@@ -52,15 +47,18 @@ Nutzung
 Start
 -----
 
-Vor dem Start des IRC-Clients muß in Administra der Netzwerk-Code geladen sein.
-Dies geschieht durch direktes Flashen in Administra oder durch Eingabe von
-"admnet". Außerdem muß der Hive natürlich an ein Netzwerk mit Internet-
-Verbindung angeschlossen sein und mittels "ipconfig" entsprechend konfiguriert
-werden.
+Der IRC-Client benötigt den Netzwerk-Code in Administra. Dieser kann direkt in
+Administra geflasht oder durch Eingabe von "admnet" geladen werden. Beim Start
+prüft der IRC-Client das Vorhandensein der Netzwerk-Funktionalitäten. Sind
+diese nicht vorhanden, wird automatisch versucht, "/system/admnet.adm" von der
+SD-Card zu laden.
 
-Der Start erfolgt dann einfach durch Eingabe von "irc" am Regime-Prompt. Nach
-dem ersten Start wird automatisch die Konfiguration aufgerufen. Nach Eingabe
-der erforderlichen Parameter (s.u.) werden diese gespeichert. Nun kann mittels
+Außerdem muß der Hive natürlich an ein Netzwerk mit Internet-Verbindung
+angeschlossen sein und mittels "ipconfig" entsprechend konfiguriert werden.
+
+Der Start erfolgt dann einfach durch Eingabe von "irc" am Regime-Prompt. Beim
+ersten Start wird automatisch die Konfiguration aufgerufen. Nach Eingabe der
+erforderlichen Parameter (s.u.) werden diese gespeichert. Nun kann mittels
 Drücken von "F3" die Verbindung zum Server aufgebaut werden.
 
 
@@ -73,14 +71,15 @@ Im untersten Fenster werden die Mitteilungen und Befehle eingegeben.
 
 Das aktive Fenster wird jeweils hervorgehoben und kann mittels Tabulator-Taste
 umgeschalten werden. Im aktiven Fenster kann mittels Cursor hoch/runter
-gescrollt werden.
+gescrollt werden (außer im Eingabefenster).
 
 Die Bedienung erfolgt durch Betätigung der Funktionstasten oder die Eingabe
 von Befehlen im EingabeFenster (s.u.). Alle Befehle beginnen mit einem
 Schrägstrich (/).
 
 Beim Erscheinen einer neuen Mitteilung im aktuellen Kanal blinkt die Regnatix-
-LED so lange, bis eine beliebige Taste gedrückt wird.
+LED so lange, bis eine beliebige Taste gedrückt wird. Außerdem wird ein Sound
+abgespielt.
 
 
 Befehlsübersicht
@@ -99,6 +98,8 @@ Befehlsübersicht
   F9             /quit   Verbindung zu Server trennen
   F10                    Programm beenden
                  /msg    Private Mitteilung (/msg <Empfänger> <Text>)
+                 /me     eigenen Status/Aktion senden (/me <Aktion>)
+                 /ctcp   Client-to-Client (/ctcp <Empfänger> <Kommando>)
                  /srv    Mit Server verbinden und anmelden (srv <IP:Port>)
                  /save   Einstellungen speichern
   Tab                    Fenster umschalten, Scrollen mit Cursor hoch/runter
@@ -135,12 +136,10 @@ identisch sein.
 
 Bei der Anmeldung am Server wird auch ein vollständiger Name übertragen. Da es
 unüblich ist, hier seinen richtigen Namen anzugeben, wird stattdessen ein Name
-in der Form "Hive #<HiveId>" generiert. <HiveId> ist der mittels "ipconfog /i"
+in der Form "Hive #<HiveId>" generiert. <HiveId> ist der mittels "ipconfig /i"
 definierte Wert.
 
 TODO
 ====
 
-- offene Eingabefenster blockieren nicht den IRC-Empfang
 - Support für mehrere gleichzeitige Channel
-- Scrollen auch im Eingabe-Fenster

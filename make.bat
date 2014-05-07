@@ -2,49 +2,56 @@ echo on
 date /T
 time /T
 
-REM Pfade
-set sd=".\bin\sdcard"
-set sd-sys=".\bin\sdcard\system"
-set flash=".\bin\flash"
-set libpath=".\lib"
+REM # Definitionen
+REM set D="-D __DEBUG -D __LANG_EN"
+REM set D="-D __LANG_EN"
+set D="-D __LANG_DE"
+
+
+REM # Pfade
+set bin="..\Bin"
+REM bin="\home\ftp\hive"
+set sd="%bin%\sdcard"
+set sdsys="%sd%\system"
+set flash="%bin%\flash"
+set libpath="lib"
 set BSTC=bstc.exe
 
 REM ----------------------------------------------------------------
 REM Alte Versionen löschen
 
-del %flash%\*.* /Q
-del %sd%\*.* /Q
-del %sd-sys%\*.* /Q
+rmdir %bin% /S /Q
+mkdir %sdsys%
+mkdir %flash%
 
 REM ----------------------------------------------------------------
 REM Flashdateien erzeugen
 REM --> \bin\flash
 
-%BSTC% -L %libpath% -b -O a .\flash\administra\admflash.spin
+%BSTC% -L %libpath% %D% -D __ADM_FAT -D __ADM_HSS -D __ADM_HSS_PLAY -D __ADM_WAV -D __ADM_RTC -D __ADM_COM -b -O a .\flash\administra\admflash.spin
 copy admflash.binary %flash%
-rename admflash.binary admsys.adm
-move admsys.adm %sd-sys%
+move admflash.binary %sdsys%\admsys.adm
 
-%BSTC% -L %libpath% -D __VGA -b -O a .\flash\bellatrix\belflash.spin
+%BSTC% -L %libpath% %D% -D __VGA -b -O a .\flash\bellatrix\belflash.spin
 copy belflash.binary %flash%
-rename belflash.binary vga.bel
-move vga.bel %sd-sys%
+move belflash.binary %sdsys%\vga.bel
 
-%BSTC% -L %libpath% -D __TV -b -O a .\flash\bellatrix\belflash.spin
-rename belflash.binary tv.bel
-move tv.bel %sd-sys%
+%BSTC% -L %libpath% %D% -D __TV -b -O a .\flash\bellatrix\belflash.spin
+move belflash.binary %sdsys%\tv.bel
 
-%BSTC% -L %libpath% -b -O a .\flash\regnatix\regflash.spin
+%BSTC% -L %libpath% %D% -D regime -b -O a .\flash\regnatix\regflash.spin
 move regflash.binary %flash%
+
+%BSTC% -L %libpath% %D% -D forth -b -O a .\flash\regnatix\regflash.spin
+move regflash.binary %flash%\regforth.binary
 
 REM ----------------------------------------------------------------
 REM Startdateie erzeugen
 REM reg.sys	(Regime)
 REM --> \bin\sdcard\
 
-%BSTC% -L %libpath% -b -O a .\system\regnatix\regime.spin 
-rename regime.binary reg.sys
-move reg.sys %sd%
+%BSTC% -L %libpath% %D% -b -O a .\system\regnatix\regime.spin 
+move regime.binary %sd%\reg.sys
 
 
 REM ----------------------------------------------------------------
@@ -52,17 +59,17 @@ REM Slave-Dateien erzeugen
 REM admsid, admay, admterm
 REM htxt, g0key
 
-%BSTC% -L %libpath% -b -O a .\system\administra\admsid\admsid.spin
-%BSTC% -L %libpath% -b -O a .\system\administra\admay\admay.spin
-rename *.binary *.adm
+%BSTC% -L %libpath% %D% -D __ADM_FAT -D __ADM_SID -b -O a .\flash\administra\admflash.spin
+move admflash.binary %sdsys%\admsid.adm
+%BSTC% -L %libpath% %D% -D __ADM_FAT -D __ADM_AYS -b -O a .\flash\administra\admflash.spin
+move admflash.binary %sdsys%\admay.adm
+%BSTC% -L %libpath% %D% -D __ADM_FAT -D __ADM_HSS -D __ADM_LAN -D __ADM_RTC -D __ADM_COM -b -O a .\flash\administra\admflash.spin
+move admflash.binary %sdsys%\admnet.adm
 
-%BSTC% -L %libpath% -b -O a .\system\bellatrix\bel-htext\htext.spin
-%BSTC% -L %libpath% -b -O a .\system\bellatrix\bel-g0\g0key.spin
-rename *.binary *.bel
-
-move *.adm %sd-sys%
-move *.bel %sd-sys%
-
+%BSTC% -L %libpath% %D% -b -O a .\system\bellatrix\bel-htext\htext.spin
+move htext.binary %sdsys%\htext.bel
+%BSTC% -L %libpath% %D% -b -O a .\system\bellatrix\bel-g0\g0key.spin
+move g0key.binary %sdsys%\g0key.bel
 
 REM ----------------------------------------------------------------
 REM Systemdateien erzeugen
@@ -70,10 +77,10 @@ REM - div. externe Kommandos
 REM - div. Systemdateien (Farbtabellen usw.)
 REM --> \bin\sdcard\system\
 
-for %%x in (.\system\regnatix\*.spin) do %BSTC% -L %libpath% -b -O a %%x 
+for %%x in (.\system\regnatix\*.spin) do %BSTC% -L %libpath% %D% -b -O a %%x 
 rename *.binary *.bin
-move *.bin %sd-sys% 
-copy .\forth\*.* %sd-sys%
-copy .\system\sonstiges %sd-sys%
+move *.bin %sdsys% 
+copy .\forth\*.* %sdsys%
+copy .\system\sonstiges %sdsys%
 
 echo off
