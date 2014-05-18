@@ -437,8 +437,8 @@ PUB main | cmd,err                                      'chip: kommandointerpret
 
 '       ----------------------------------------------  Bluetooth-FUNKTIONEN
 #ifdef __ADM_BLT
-        gc#a_bltCommand_On: blt_setCommandMode
-        gc#a_bltCommand_Off: blt_setNormalMode
+        gc#a_bl_Command_On: blt_setCommandMode
+        gc#a_bl_Command_Off: blt_setNormalMode
 #endif '__ADM_BLT
 
 '       ----------------------------------------------  COM-FUNKTIONEN
@@ -474,24 +474,24 @@ PUB main | cmd,err                                      'chip: kommandointerpret
 
 '       ----------------------------------------------  DCF77-FUNKTIONEN
 #ifdef __ADM_DCF
-        gc#a_dcfGetInSync: dcf_getInSync                'Sync-Status senden
-        gc#a_dcfUpdateRTC: dcf_updateRTC                'RTC Synchronisieren
-        gc#a_dcfGetBitError: dcf_getBitError
-        gc#a_dcfGetDataCount: dcf_getDataCount
-        gc#a_dcfGetBitNumber: dcf_getBitNumber
-        gc#a_dcfGetBitLevel: dcf_getBitLevel
-        gc#a_dcfGetTimeZone: dcf_getTimeZone
-        gc#a_dcfGetActiveSet: dcf_getActiveSet
-        gc#a_dcfStart: dcf_start                        'DCF-Empfang starten
-        gc#a_dcfStop: dcf_stop                          'DCF-Empfang stoppen
-        gc#a_dcfState: dcf_state                        'Status des DCF-Empfängers
-        gc#a_dcfGetSeconds: dcf_getSeconds
-        gc#a_dcfGetMinutes: dcf_getMinutes
-        gc#a_dcfGetHours: dcf_getHours
-        gc#a_dcfGetWeekDay: dcf_getWeekDay
-        gc#a_dcfGetDay: dcf_getDay
-        gc#a_dcfGetMonth: dcf_getMonth
-        gc#a_dcfGetYear: dcf_getYear
+        gc#a_DCF_InSync: dcf_getInSync                   'Sync-Status senden
+        gc#a_DCF_Update_Clock: dcf_updateRTC             'RTC Synchronisieren
+        gc#a_DCF_GetBitError: dcf_getBitError
+        gc#a_DCF_GetDatacount: dcf_getDataCount
+        gc#a_DCF_GetBitNumber: dcf_getBitNumber
+        gc#a_DCF_GetBitLevel: dcf_getBitLevel
+        gc#a_DCF_GetTimeZone: dcf_getTimeZone
+        gc#a_DCF_GetActiveSet: dcf_getActiveSet
+        gc#a_DCF_start: dcf_start                        'DCF-Empfang starten
+        gc#a_DCF_stop: dcf_stop                          'DCF-Empfang stoppen
+        gc#a_DCF_dcfon: dcf_state                        'Status des DCF-Empfängers
+        gc#a_DCF_GetSeconds: dcf_getSeconds
+        gc#a_DCF_GetMinutes: dcf_getMinutes
+        gc#a_DCF_GetHours: dcf_getHours
+        gc#a_DCF_GetWeekDay: dcf_getWeekDay
+        gc#a_DCF_GetDay: dcf_getDay
+        gc#a_DCF_GetMonth: dcf_getMonth
+        gc#a_DCF_GetYear: dcf_getYear
 #endif '__ADM_DCF
 
 '       ----------------------------------------------  LAN-FUNKTIONEN

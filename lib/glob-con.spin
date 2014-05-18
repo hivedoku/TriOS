@@ -147,8 +147,8 @@ A_BLT           = %00000000_00000000_00001000_00000000
         a_sdDirSize              '33                    'Dateigrösse ->ist quatsch
 
 '       ----------------------------------------------  Bluetooth-Funktionen
-#35,    a_bltCommand_On
-        a_bltCommand_Off         '36
+#35,    a_bl_Command_On
+        a_bl_Command_Off         '36
 
 '       ----------------------------------------------  COM-FUNKTIONEN
 #37,    a_comInit
@@ -178,24 +178,24 @@ A_BLT           = %00000000_00000000_00001000_00000000
         a_rtcGetTime      '59                           'Returns the current hour, minute and second from the real time clock.
 
 '       ----------------------------------------------  DCF77-FUNKTIONEN
-#60,    a_dcfGetInSync                                  'Sync-Status senden
-        a_dcfUpdateRTC                                  'RTC Synchronisieren
-        a_dcfGetBitError
-        a_dcfGetDataCount
-        a_dcfGetBitNumber
-        a_dcfGetBitLevel
-        a_dcfGetTimeZone
-        a_dcfGetActiveSet
-        a_dcfStart                                      'DCF-Empfang starten
-        a_dcfStop                                       'DCF-Empfang stoppen
-        a_dcfState                                      'Status des DCF-Empfängers
-        a_dcfGetSeconds
-        a_dcfGetMinutes
-        a_dcfGetHours
-        a_dcfGetWeekDay
-        a_dcfGetDay
-        a_dcfGetMonth
-        a_dcfGetYear      '77
+#60,    a_DCF_InSync                                    'Sync-Status senden
+        a_DCF_Update_Clock                              'RTC Synchronisieren
+        a_DCF_GetBitError
+        a_DCF_GetDatacount
+        a_DCF_GetBitNumber
+        a_DCF_GetBitLevel
+        a_DCF_GetTimeZone
+        a_DCF_GetActiveSet
+        a_DCF_start                                     'DCF-Empfang starten
+        a_DCF_stop                                      'DCF-Empfang stoppen
+        a_DCF_dcfon                                     'Status des DCF-Empfängers
+        a_DCF_GetSeconds
+        a_DCF_GetMinutes
+        a_DCF_GetHours
+        a_DCF_GetWeekDay
+        a_DCF_GetDay
+        a_DCF_GetMonth
+        a_DCF_GetYear      '77
 
 '       ----------------------------------------------  LAN-FUNKTIONEN
 #81,    a_lanStart                                      'Start Network
