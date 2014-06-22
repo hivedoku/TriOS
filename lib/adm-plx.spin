@@ -28,26 +28,26 @@ Notizen         :
 
 
 OBJ
-  gc    : "m-glob-con"
+  gc    : "glob-con"
 
 
 CON
 
   SCL   = gc#adm_scl
   SDA   = gc#adm_sda
-'  VNX   = gc#adm_int1
+
 ' portadressen sepia
 
   'pcf8574  %0100_ABC_0
   PORT1 =   %0100_000   '$20
   PORT2 =   %0100_001   '$21
   PORT3 =   %0100_010   '$22
-{
+
   'pcf8574a %0111_ABC_0
-  PORT1 =   %0111_000   '$38
-  PORT2 =   %0111_001   '$39
-  PORT3 =   %0111_010   '$3A
-}
+'  PORT1 =   %0111_000   '$38
+'  PORT2 =   %0111_001   '$39
+'  PORT3 =   %0111_010   '$3A
+
 ' ad/da-wandler-adresse
 
   'pcf8591     %1001_ABC_R
@@ -84,7 +84,7 @@ CON
   R_INP0        = 4
   R_INP1        = 5
   R_INP2        = 6
-'  R_VNX         = 7
+
 
 
 VAR
@@ -120,11 +120,7 @@ PUB init                                                'plx: io-system initiali
 
   'pollcog starten
   plxcogid := cognew(poller,@plxstack)
-pub plxstop
 
-   if(plxcogid)
-     cogstop(plxcogid~ - 1)
-     lockret(-1 + plxlock~)
 PRI poller                                              'plx: pollcog
 
   repeat
@@ -134,18 +130,14 @@ PRI poller                                              'plx: pollcog
     'analoge eingänge pollen
     plxreg[R_PAD0] := ad_ch(adr_adda,0)
     plxreg[R_PAD1] := ad_ch(adr_adda,1)
-    lockclr(plxlock)            'bus freigeben
-
-    repeat until not lockset(plxlock) 'auf freien bus warten
     plxreg[R_PAD2] := ad_ch(adr_adda,2)
     plxreg[R_PAD3] := ad_ch(adr_adda,3)
-    lockclr(plxlock)            'bus freigeben
 
-    repeat until not lockset(plxlock) 'auf freien bus warten
     'digitale eingabeports pollen
     plxreg[R_INP0] := in(adr_port  )
     plxreg[R_INP1] := in(adr_port+1)
     plxreg[R_INP2] := in(adr_port+2)
+
     'semaphore freigeben
     lockclr(plxlock)            'bus freigeben
 
@@ -211,11 +203,27 @@ PUB ping(adr):ack                                       'plx: device anpingen
 
 PUB setadr(adradda,adrport)
 
-  'halt
+  halt
   adr_adda := adradda
   adr_port := adrport
   ad_init(adr_adda)
-  'run
+  run
+
+PUB vexput(data,regnr,adr):ack                          'plx: register in venatrix-plexus setzen
+
+  start
+  ack := write(adr << 1)
+  ack := (ack << 1) | write(regnr)
+  ack := (ack << 1) | write(data)
+  stop
+
+PUB vexget(regnr,adr):data|ack                          'plx: regsiter aus venatrix-plexus auslesen
+
+  start
+  write((adr << 1) + 1)
+  write(regnr)
+  data := read(0)
+  stop
 
 CON                                                     'I2C-FUNKTIONEN
 

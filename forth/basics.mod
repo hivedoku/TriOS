@@ -481,5 +481,9 @@ wvariable lcog           \ nummer interaktiven cog
 : _ob onboot ;
 : onboot _ob start ;
 
+saveforth
+
+reboot
+
 
 

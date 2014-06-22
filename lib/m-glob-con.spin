@@ -46,6 +46,12 @@ con     ' signaldefinitionen
 #10,    ADM_SDD0,ADM_SDCLK,ADM_SDCMD,ADM_SDD3           'sd-cardreader (4 pin)
 #23,    ADM_SELECT                                      'administra-auswahlsignal
 
+'plexbus
+adm_sda  = 19                                           'i2c-datenpin
+adm_scl  = 20                                           'i2c-clockpin
+adm_int1 = 21                                           'interrupt port 1&2
+adm_int2 = 22                                           'interrupt port 3
+
 con     ' administra-funktionen
 
 ADM_OPT              = 0
@@ -85,32 +91,44 @@ ADM_COM_RX      = 41                                    'com: zeichen empfangen
 
 adm_m_run       = 50                                    'plx: polling aktivieren
 adm_m_halt      = 51                                    'plx: polling anhalten
-adm_m_setctrl   = 52
-adm_m_in        = 53
-adm_m_out       = 54
-adm_m_ad_ch     = 55
-adm_m_getreg    = 56
-adm_m_setreg    = 57
-adm_m_start     = 58
-adm_m_stop      = 59
-adm_m_write     = 60
-adm_m_read      = 61
-adm_m_ping      = 62
+adm_m_in        = 52
+adm_m_out       = 53
+adm_m_adch      = 54
+adm_m_getreg    = 55
+adm_m_setreg    = 56
+adm_m_start     = 57
+adm_m_stop      = 58
+adm_m_write     = 59
+adm_m_read      = 60
+adm_m_ping      = 61
+adm_m_setadr    = 62
 adm_m_joy       = 63
 adm_m_paddle    = 64
 adm_m_pad       = 65
 adm_m_setjoy    = 66
 adm_m_setpad    = 67
 
+adm_m_chan      = 70
+adm_m_regclr    = 71
+adm_m_setvol    = 72
+adm_m_play      = 73
+adm_m_noteon    = 74
+adm_m_noteoff   = 75
+adm_m_setfreq   = 76
+adm_m_setwave   = 77
+adm_m_setpw     = 78
+adm_m_setadsr   = 79
+adm_m_setres    = 80
+adm_m_setcoff   = 81
+adm_m_setfmask  = 82
+adm_m_setftype  = 83
+adm_m_ringmod   = 84
+adm_m_sync      = 85
+
 adm_m_getspec   = 97                                    'spezifikation abfragen
 adm_m_getver    = 98                                    'codeversion abfragen
 adm_m_reboot    = 99                                    'neu starten
 
-'plexbus
-adm_sda  = 19                                           'i2c-datenpin
-adm_scl  = 20                                           'i2c-clockpin
-adm_int1 = 21                                           'interrupt port 1&2
-adm_int2 = 22                                           'interrupt port 3
 
 
 con     ' bellatrix-funktionen

@@ -52,9 +52,6 @@ FL_SEL          = %0000_0001    'eintrag ist selektiert
 
 FL_FOCUS        = %0000_0001    'box ist selektiert
 
-DR_SD           = 0
-DR_RAM          = 1
-DR_BLK          = 2
 
 PUB dummy
 

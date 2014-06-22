@@ -28,6 +28,7 @@ Administra
                   scr           : Screeninterface
                   hss           : Hydra-Soundsystem
                   sfx           : Sound-FX
+                  plx           : Gamedevices & Plexbus
 
 Bellatrix
                   key           : Keyboardroutinen
@@ -484,7 +485,7 @@ PUB admload(stradr)|dmu                                 'chip-mgr: neuen adminis
 ''busprotokoll                  : [096][sub_putstr.fn]
 ''                              : fn - dateiname des neuen administra-codes
 
-  bus_putchar1(gc#a_mgrALoad)   'aktuelles userdir retten
+  bus_putchar1(gc#a_mgrALoad)
   bus_putstr1(stradr)
   waitcnt(cnt + clkfreq*3)      'warte bis administra fertig ist
 
@@ -1493,22 +1494,22 @@ PUB sid_sdmpplay(stradr): err                           'sid: dmp-datei stereo a
   bus_putstr1(stradr)
   err := bus_getchar1
 
-PUB sid_dmpstop
+PUB sid_dmpstop                                         'sid: dmp-player anhalten
   bus_putchar1(gc#a_s_dmpstop)
 
-PUB sid_dmppause
+PUB sid_dmppause                                        'sid: dmp-player pausieren
   bus_putchar1(gc#a_s_dmppause)
 
-PUB sid_dmpstatus: status
+PUB sid_dmpstatus: status                               'sid: dmp-player status abfragen
   bus_putchar1(gc#a_s_dmpstatus)
   status := bus_getchar1
 
-PUB sid_dmppos: wert
+PUB sid_dmppos: wert                                    'sid: dmp-player playposition abfragen
   bus_putchar1(gc#a_s_dmppos)
   wert := bus_getlong1
           bus_getlong1
 
-PUB sid_dmplen: wert
+PUB sid_dmplen: wert                                    'sid: dmp-datei länge abfragen
   bus_putchar1(gc#a_s_dmppos)
           bus_getlong1
   wert := bus_getlong1
@@ -1725,6 +1726,98 @@ PUB com_rx:char                                         'com: zeichen empfangen
 
   bus_putchar1(gc#a_comRx)
   char := bus_getchar1
+
+CON ''------------------------------------------------- Plexbus und Gamedevices
+
+PUB plxrun                                              'plx: bus freigeben, poller starten
+
+  bus_putchar1(gc#a_plxRun)
+
+PUB plxhalt                                             'plx: bus anfordern, poller anhalten
+
+  bus_putchar1(gc#a_plxHalt)
+
+PUB plxin(adr):wert                                     'plx: port einlesen
+
+  bus_putchar1(gc#a_plxIn)
+  bus_putchar1(adr)
+  wert := bus_getchar1
+
+PUB plxout(adr,wert)                                    'plx: port ausgeben
+
+
+  bus_putchar1(gc#a_plxOut)
+  bus_putchar1(adr)
+  bus_putchar1(wert)
+
+PUB plxch(adr,chan):wert                                'plx: ad-wandlerkanal abfragen
+
+  bus_putchar1(gc#a_plxCh)
+  bus_putchar1(adr)
+  bus_putchar1(chan)
+  wert := bus_getchar1
+
+PUB plxgetreg(regnr):wert                               'plx: poller-register lesen
+
+  bus_putchar1(gc#a_plxGetReg)
+  bus_putchar1(regnr)
+  wert := bus_getchar1
+
+PUB plxsetreg(regnr,wert)                               'plx: poller-register schreiben
+
+  bus_putchar1(gc#a_plxSetReg)
+  bus_putchar1(regnr)
+  bus_putchar1(wert)
+
+PUB plxstart                                            'plx: i2c-dialog starten
+
+  bus_putchar1(gc#a_plxStart)
+
+PUB plxstop                                             'plx: i2c-dialog beenden
+
+  bus_putchar1(gc#a_plxStop)
+
+PUB plxwrite(wert):ack                                  'plx: i2c byte schreiben
+
+  bus_putchar1(gc#a_plxWrite)
+  bus_putchar1(wert)
+  ack := bus_getchar1
+
+PUB plxread(ack):wert                                   'plx: i2c byte lesen
+
+  bus_putchar1(gc#a_plxRead)
+  bus_putchar1(ack)
+  wert := bus_getchar1
+
+PUB plxping(adr):ack                                    'plx: device abfragen
+
+  bus_putchar1(gc#a_plxPing)
+  bus_putchar1(adr)
+  ack := bus_getchar1
+
+PUB plxsetadr(adradda,adrport)                          'plx: adressen adda/port für poller setzen
+
+  bus_putchar1(gc#a_plxSetAdr)
+  bus_putchar1(adradda)
+  bus_putchar1(adrport)
+
+PUB joy:wert                                            'game: joystick abfragen
+
+  bus_putchar1(gc#a_Joy)
+  wert := bus_getchar1
+
+PUB paddle:wert                                         'game: paddle abfrage
+
+  bus_putchar1(gc#a_Paddle)
+  wert := wert + bus_getchar1 << 8
+  wert := wert + bus_getchar1
+
+PUB pad:wert                                            'game: pad abfrage
+
+  bus_putchar1(gc#a_Pad)
+  wert := wert + bus_getchar1 << 16
+  wert := wert + bus_getchar1 << 8
+  wert := wert + bus_getchar1
 
 OBJ '' B E L L A T R I X
 
@@ -1950,6 +2043,10 @@ PUB printcstr(eadr) | i,len                             'screen: bildschirmausga
     eadr++
     bus_putchar2(ram_rdbyte(1,eadr))
     
+PUB printblk(stringptr,strlen)                          'screen: bildschirmausgabe eines strings definierter länge
+
+  repeat strlen
+    bus_putchar2(byte[stringptr++])
 
 PUB printdec(value) | i                                 'screen: dezimalen zahlenwert auf bildschirm ausgeben
 {{printdec(value) - screen: dezimale bildschirmausgabe zahlenwertes}}

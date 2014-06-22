@@ -72,6 +72,7 @@ Logbuch         :
 21-10-2012-uheld  - Window-Funktionen
 28-11-2012-uheld  - wahlweise Einbindung von VGA- oder TV-Treiber über #define
 15-04-2013-dr235  - konstanten für bellatrix-funktionen komplett ausgelagert
+22.02.2014-dr235  - per compilerflag wählbare monitorsettings eingefügt (57/60hz)
 
 Notizen:
 - setheader
@@ -131,6 +132,14 @@ $0A..FF					                           CHAR	        Zeichenausgabe
 
 '#define __TV
 '#define __VGA
+
+'Hier sind verschiedene Timings für den Monitor wählbar.
+'Die Settings selbst befinden sich in der Datei /lib/bel-vga.spin und
+'können dort auch um weitere Optionen erweitert werden.
+
+#define __VGA_MONSET1           '60Hz
+'#define __VGA_MONSET2          '57Hz
+
 
 CON
 

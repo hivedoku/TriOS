@@ -14,7 +14,7 @@ Chip            : Regnatix
 Typ             : Programm
 Version         : 
 Subversion      : 
-Funktion        :
+Funktion        : Eingabedialog String
 Komponenten     : -
 COG's           : -
 Logbuch         :

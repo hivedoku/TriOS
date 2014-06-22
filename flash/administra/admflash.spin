@@ -269,14 +269,14 @@ CHIP_SPEC = CHIP_SPEC_FAT|CHIP_SPEC_LDR|CHIP_SPEC_HSS|CHIP_SPEC_WAV|CHIP_SPEC_SI
 '          clk     -------+|
 '          /wr     ------+||
 '          /hs     -----+||| +------------------------- /cs
-'                       |||| |+------------------------ adm-p22
-'                       |||| ||+----------------------- adm-p21 (io)
-'                       |||| |||+---------------------- adm-p20 (rx)
-'                       |||| ||||+--------------------- adm-p19 (tx)
+'                       |||| |+------------------------ adm-p22 (int2 - port 1/2)
+'                       |||| ||+----------------------- adm-p21 (int1 - port 3)
+'                       |||| |||+---------------------- adm-p20 (scl)
+'                       |||| ||||+--------------------- adm-p19 (sda)
 '                       |||| |||||             +------+ d0..d7
 '                       |||| |||||             |      |
-DB_IN            = %00001001_00100000_00000000_00000000 'dira-wert für datenbuseingabe
-DB_OUT           = %00001001_00100000_00000000_11111111 'dira-wert für datenbusausgabe
+DB_IN            = %00001001_00000000_00000000_00000000 'dira-wert für datenbuseingabe
+DB_OUT           = %00001001_00000000_00000000_11111111 'dira-wert für datenbusausgabe
 
 M1               = %00000010_00000000_00000000_00000000 'busclk=1? & /prop1=0?
 M2               = %00000010_10000000_00000000_00000000 'maske: busclk & /cs (/prop1)
@@ -347,7 +347,7 @@ OBJ
   com             : "adm-com"        'serielle schnittstelle
 #endif
 #ifdef __ADM_LAN
-  sock            : "driver_socket"  'LAN
+  sock            : "adm-socket"     'LAN
   num             : "glob-numbers"   'Number Engine
 #endif
 #ifdef __ADM_PLX
@@ -398,232 +398,237 @@ PUB main | cmd,err                                      'chip: kommandointerpret
 
 '       ----------------------------------------------  SD-FUNKTIONEN
 #ifdef __ADM_FAT
-        gc#a_sdMount: sd_mount("M")                     'sd-card mounten                                              '
-        gc#a_sdOpenDir: sd_opendir                      'direktory öffnen
-        gc#a_sdNextFile: sd_nextfile                    'verzeichniseintrag lesen
-        gc#a_sdOpen: sd_open                            'datei öffnen
-        gc#a_sdClose: sd_close                          'datei schließen
-        gc#a_sdGetC: sd_getc                            'zeichen lesen
-        gc#a_sdPutC: sd_putc                            'zeichen schreiben
-        gc#a_sdGetBlk: sd_getblk                        'block lesen
-        gc#a_sdPutBlk: sd_putblk                        'block schreiben
-        gc#a_sdSeek: sd_seek                            'zeiger in datei positionieren
-        gc#a_sdFAttrib: sd_fattrib                      'dateiattribute übergeben
-        gc#a_sdVolname: sd_volname                      'volumelabel abfragen
+        gc#a_sdMount:        sd_mount("M")              'sd-card mounten                                              '
+        gc#a_sdOpenDir:      sd_opendir                 'direktory öffnen
+        gc#a_sdNextFile:     sd_nextfile                'verzeichniseintrag lesen
+        gc#a_sdOpen:         sd_open                    'datei öffnen
+        gc#a_sdClose:        sd_close                   'datei schließen
+        gc#a_sdGetC:         sd_getc                    'zeichen lesen
+        gc#a_sdPutC:         sd_putc                    'zeichen schreiben
+        gc#a_sdGetBlk:       sd_getblk                  'block lesen
+        gc#a_sdPutBlk:       sd_putblk                  'block schreiben
+        gc#a_sdSeek:         sd_seek                    'zeiger in datei positionieren
+        gc#a_sdFAttrib:      sd_fattrib                 'dateiattribute übergeben
+        gc#a_sdVolname:      sd_volname                 'volumelabel abfragen
         gc#a_sdCheckMounted: sd_checkmounted            'test ob volume gemounted ist
-        gc#a_sdCheckOpen: sd_checkopen                  'test ob eine datei geöffnet ist
-        gc#a_sdCheckUsed: sd_checkused                  'test wie viele sektoren benutzt sind
-        gc#a_sdCheckFree: sd_checkfree                  'test wie viele sektoren frei sind
-        gc#a_sdNewFile: sd_newfile                      'neue datei erzeugen
-        gc#a_sdNewDir: sd_newdir                        'neues verzeichnis wird erzeugt
-        gc#a_sdDel: sd_del                              'verzeichnis oder datei löschen
-        gc#a_sdRename: sd_rename                        'verzeichnis oder datei umbenennen
-        gc#a_sdChAttrib: sd_chattrib                    'attribute ändern
-        gc#a_sdChDir: sd_chdir                          'verzeichnis wechseln
-        gc#a_sdFormat: sd_format                        'medium formatieren
-        gc#a_sdUnmount: sd_unmount                      'medium abmelden
-        gc#a_sdDmAct: sd_dmact                          'dir-marker aktivieren
-        gc#a_sdDmSet: sd_dmset                          'dir-marker setzen
-        gc#a_sdDmGet: sd_dmget                          'dir-marker status abfragen
-        gc#a_sdDmClr: sd_dmclr                          'dir-marker löschen
-        gc#a_sdDmPut: sd_dmput                          'dir-marker status setzen
-        gc#a_sdEOF: sd_eof                              'eof abfragen
+        gc#a_sdCheckOpen:    sd_checkopen               'test ob eine datei geöffnet ist
+        gc#a_sdCheckUsed:    sd_checkused               'test wie viele sektoren benutzt sind
+        gc#a_sdCheckFree:    sd_checkfree               'test wie viele sektoren frei sind
+        gc#a_sdNewFile:      sd_newfile                 'neue datei erzeugen
+        gc#a_sdNewDir:       sd_newdir                  'neues verzeichnis wird erzeugt
+        gc#a_sdDel:          sd_del                     'verzeichnis oder datei löschen
+        gc#a_sdRename:       sd_rename                  'verzeichnis oder datei umbenennen
+        gc#a_sdChAttrib:     sd_chattrib                'attribute ändern
+        gc#a_sdChDir:        sd_chdir                   'verzeichnis wechseln
+        gc#a_sdFormat:       sd_format                  'medium formatieren
+        gc#a_sdUnmount:      sd_unmount                 'medium abmelden
+        gc#a_sdDmAct:        sd_dmact                   'dir-marker aktivieren
+        gc#a_sdDmSet:        sd_dmset                   'dir-marker setzen
+        gc#a_sdDmGet:        sd_dmget                   'dir-marker status abfragen
+        gc#a_sdDmClr:        sd_dmclr                   'dir-marker löschen
+        gc#a_sdDmPut:        sd_dmput                   'dir-marker status setzen
+        gc#a_sdEOF:          sd_eof                     'eof abfragen
 #ifdef __ADM_FAT_EXT
-        gc#a_sdPos: sd_pos                              'Zeiger in Datei abfragen
-        gc#a_sdCopy: sd_copy                            'Datei kopieren
-        gc#a_sdDirSize: sd_dirsize                      'Dateigrösse ->ist quatsch
+        gc#a_sdPos:          sd_pos                     'Zeiger in Datei abfragen
+        gc#a_sdCopy:         sd_copy                    'Datei kopieren
+        gc#a_sdDirSize:      sd_dirsize                 'Dateigrösse ->ist quatsch
 #endif '__ADM_FAT_EXT
 #endif '__ADM_FAT
 
 '       ----------------------------------------------  Bluetooth-FUNKTIONEN
 #ifdef __ADM_BLT
-        gc#a_bl_Command_On: blt_setCommandMode
+        gc#a_bl_Command_On:  blt_setCommandMode
         gc#a_bl_Command_Off: blt_setNormalMode
 #endif '__ADM_BLT
 
 '       ----------------------------------------------  COM-FUNKTIONEN
 #ifdef __ADM_COM
         gc#a_comInit: com_init
-        gc#a_comTx: com_tx
-        gc#a_comRx: com_rx
+        gc#a_comTx:   com_tx
+        gc#a_comRx:   com_rx
 #endif '__ADM_COM
 
 '       ----------------------------------------------  RTC-FUNKTIONEN
 #ifdef __ADM_RTC
-        gc#a_rtcTest: rtc_test                          'Test if RTC Chip is available
-        gc#a_rtcGetSeconds: rtc_getSeconds              'Returns the current second (0 - 59) from the real time clock.
-        gc#a_rtcGetMinutes: rtc_getMinutes              'Returns the current minute (0 - 59) from the real time clock.
-        gc#a_rtcGetHours: rtc_getHours                  'Returns the current hour (0 - 23) from the real time clock.
-        gc#a_rtcGetDay: rtc_getDay                      'Returns the current day (1 - 7) from the real time clock.
-        gc#a_rtcGetDate: rtc_getDate                    'Returns the current date (1 - 31) from the real time clock.
-        gc#a_rtcGetMonth: rtc_getMonth                  'Returns the current month (1 - 12) from the real time clock.
-        gc#a_rtcGetYear: rtc_getYear                    'Returns the current year (2000 - 2099) from the real time clock.
-        gc#a_rtcSetSeconds: rtc_setSeconds              'Sets the current real time clock seconds. Seconds - Number to set the seconds to between 0 - 59.
-        gc#a_rtcSetMinutes: rtc_setMinutes              'Sets the current real time clock minutes. Minutes - Number to set the minutes to between 0 - 59.
-        gc#a_rtcSetHours: rtc_setHours                  'Sets the current real time clock hours. Hours - Number to set the hours to between 0 - 23.
-        gc#a_rtcSetDay: rtc_setDay                      'Sets the current real time clock day. Day - Number to set the day to between 1 - 7.
-        gc#a_rtcSetDate: rtc_setDate                    'Sets the current real time clock date. Date - Number to set the date to between 1 - 31.
-        gc#a_rtcSetMonth: rtc_setMonth                  'Sets the current real time clock month. Month - Number to set the month to between 1 - 12.
-        gc#a_rtcSetYear: rtc_setYear                    'Sets the current real time clock year. Year - Number to set the year to between 2000 - 2099.
-        gc#a_rtcSetNVSRAM: rtc_setNVSRAM                'Sets the NVSRAM to the selected value (0 - 255) at the index (0 - 55).
-        gc#a_rtcGetNVSRAM: rtc_getNVSRAM                'Gets the selected NVSRAM value at the index (0 - 55).
-        gc#a_rtcPauseForSec: rtc_pauseForSeconds        'Pauses execution for a number of seconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of seconds to pause for between 0 and 2,147,483,647.
+        gc#a_rtcTest:         rtc_test                  'Test if RTC Chip is available
+        gc#a_rtcGetSeconds:   rtc_getSeconds            'Returns the current second (0 - 59) from the real time clock.
+        gc#a_rtcGetMinutes:   rtc_getMinutes            'Returns the current minute (0 - 59) from the real time clock.
+        gc#a_rtcGetHours:     rtc_getHours              'Returns the current hour (0 - 23) from the real time clock.
+        gc#a_rtcGetDay:       rtc_getDay                'Returns the current day (1 - 7) from the real time clock.
+        gc#a_rtcGetDate:      rtc_getDate               'Returns the current date (1 - 31) from the real time clock.
+        gc#a_rtcGetMonth:     rtc_getMonth              'Returns the current month (1 - 12) from the real time clock.
+        gc#a_rtcGetYear:      rtc_getYear               'Returns the current year (2000 - 2099) from the real time clock.
+        gc#a_rtcSetSeconds:   rtc_setSeconds            'Sets the current real time clock seconds. Seconds - Number to set the seconds to between 0 - 59.
+        gc#a_rtcSetMinutes:   rtc_setMinutes            'Sets the current real time clock minutes. Minutes - Number to set the minutes to between 0 - 59.
+        gc#a_rtcSetHours:     rtc_setHours              'Sets the current real time clock hours. Hours - Number to set the hours to between 0 - 23.
+        gc#a_rtcSetDay:       rtc_setDay                'Sets the current real time clock day. Day - Number to set the day to between 1 - 7.
+        gc#a_rtcSetDate:      rtc_setDate               'Sets the current real time clock date. Date - Number to set the date to between 1 - 31.
+        gc#a_rtcSetMonth:     rtc_setMonth              'Sets the current real time clock month. Month - Number to set the month to between 1 - 12.
+        gc#a_rtcSetYear:      rtc_setYear               'Sets the current real time clock year. Year - Number to set the year to between 2000 - 2099.
+        gc#a_rtcSetNVSRAM:    rtc_setNVSRAM             'Sets the NVSRAM to the selected value (0 - 255) at the index (0 - 55).
+        gc#a_rtcGetNVSRAM:    rtc_getNVSRAM             'Gets the selected NVSRAM value at the index (0 - 55).
+        gc#a_rtcPauseForSec:  rtc_pauseForSeconds       'Pauses execution for a number of seconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of seconds to pause for between 0 and 2,147,483,647.
         gc#a_rtcPauseForMSec: rtc_pauseForMilliseconds  'Pauses execution for a number of milliseconds. Returns a puesdo random value derived from the current clock frequency and the time when called. Number - Number of milliseconds to pause for between 0 and 2,147,483,647.
-        gc#a_rtcGetTime: rtc_getTime                    'Returns the current hour, minute and second from the real time clock.
+        gc#a_rtcGetTime:      rtc_getTime               'Returns the current hour, minute and second from the real time clock.
 #endif '__ADM_RTC
 
 '       ----------------------------------------------  DCF77-FUNKTIONEN
 #ifdef __ADM_DCF
-        gc#a_DCF_InSync: dcf_getInSync                   'Sync-Status senden
-        gc#a_DCF_Update_Clock: dcf_updateRTC             'RTC Synchronisieren
-        gc#a_DCF_GetBitError: dcf_getBitError
+        gc#a_DCF_InSync:       dcf_getInSync            'Sync-Status senden
+        gc#a_DCF_Update_Clock: dcf_updateRTC            'RTC Synchronisieren
+        gc#a_DCF_GetBitError:  dcf_getBitError
         gc#a_DCF_GetDatacount: dcf_getDataCount
         gc#a_DCF_GetBitNumber: dcf_getBitNumber
-        gc#a_DCF_GetBitLevel: dcf_getBitLevel
-        gc#a_DCF_GetTimeZone: dcf_getTimeZone
+        gc#a_DCF_GetBitLevel:  dcf_getBitLevel
+        gc#a_DCF_GetTimeZone:  dcf_getTimeZone
         gc#a_DCF_GetActiveSet: dcf_getActiveSet
-        gc#a_DCF_start: dcf_start                        'DCF-Empfang starten
-        gc#a_DCF_stop: dcf_stop                          'DCF-Empfang stoppen
-        gc#a_DCF_dcfon: dcf_state                        'Status des DCF-Empfängers
-        gc#a_DCF_GetSeconds: dcf_getSeconds
-        gc#a_DCF_GetMinutes: dcf_getMinutes
-        gc#a_DCF_GetHours: dcf_getHours
-        gc#a_DCF_GetWeekDay: dcf_getWeekDay
-        gc#a_DCF_GetDay: dcf_getDay
-        gc#a_DCF_GetMonth: dcf_getMonth
-        gc#a_DCF_GetYear: dcf_getYear
+        gc#a_DCF_start:        dcf_start                'DCF-Empfang starten
+        gc#a_DCF_stop:         dcf_stop                 'DCF-Empfang stoppen
+        gc#a_DCF_dcfon:        dcf_state                'Status des DCF-Empfängers
+        gc#a_DCF_GetSeconds:   dcf_getSeconds
+        gc#a_DCF_GetMinutes:   dcf_getMinutes
+        gc#a_DCF_GetHours:     dcf_getHours
+        gc#a_DCF_GetWeekDay:   dcf_getWeekDay
+        gc#a_DCF_GetDay:       dcf_getDay
+        gc#a_DCF_GetMonth:     dcf_getMonth
+        gc#a_DCF_GetYear:      dcf_getYear
 #endif '__ADM_DCF
 
 '       ----------------------------------------------  LAN-FUNKTIONEN
 #ifdef __ADM_LAN
-        gc#a_lanStart: lan_start                        'Start Network
-        gc#a_lanStop:lan_stop                           'Stop Network
-        gc#a_lanConnect: lan_connect                    'ausgehende TCP-Verbindung öffnen
-        gc#a_lanListen: lan_listen                      'auf eingehende TCP-Verbindung lauschen
+        gc#a_lanStart:           lan_start              'Start Network
+        gc#a_lanStop:            lan_stop               'Stop Network
+        gc#a_lanConnect:         lan_connect            'ausgehende TCP-Verbindung öffnen
+        gc#a_lanListen:          lan_listen             'auf eingehende TCP-Verbindung lauschen
         gc#a_lanWaitConnTimeout: lan_waitconntimeout    'bestimmte Zeit auf Verbindung warten
-        gc#a_lanClose: lan_close                        'TCP-Verbindung schließen
-        gc#a_lanRXTime: lan_rxtime                      'bestimmte Zeit warten auf Byte aus Empfangspuffer
-        gc#a_lanRXData: lan_rxdata                      'Daten aus Empfangspuffer lesen
-        gc#a_lanTXData: lan_txdata                      'Daten senden
-        gc#a_lanRXByte: lan_rxbyte                      'wenn vorhanden, Byte aus Empfangspuffer lesen
-        gc#a_lanIsConnected: lan_isconnected            'TRUE, wenn Socket verbunden, sonst FALSE
+        gc#a_lanClose:           lan_close              'TCP-Verbindung schließen
+        gc#a_lanRXTime:          lan_rxtime             'bestimmte Zeit warten auf Byte aus Empfangspuffer
+        gc#a_lanRXData:          lan_rxdata             'Daten aus Empfangspuffer lesen
+        gc#a_lanTXData:          lan_txdata             'Daten senden
+        gc#a_lanRXByte:          lan_rxbyte             'wenn vorhanden, Byte aus Empfangspuffer lesen
+        gc#a_lanIsConnected:     lan_isconnected        'TRUE, wenn Socket verbunden, sonst FALSE
 #endif '__ADM_LAN
 
 '       ----------------------------------------------  CHIP-MANAGMENT
-        gc#a_mgrSetSound: mgr_setsound                  'soundsubsysteme verwalten
-        gc#a_mgrGetSpec: mgr_getspec                    'spezifikation abfragen
+        gc#a_mgrSetSound:    mgr_setsound               'soundsubsysteme verwalten
+        gc#a_mgrGetSpec:     mgr_getspec                'spezifikation abfragen
         gc#a_mgrSetSysSound: mgr_setsyssound            'systemsound ein/ausschalten
         gc#a_mgrGetSoundSys: mgr_getsoundsys            'abfrage welches soundsystem aktiv ist
-        gc#a_mgrALoad: mgr_aload                        'neuen code booten
-        gc#a_mgrGetCogs: mgr_getcogs                    'freie cogs abfragen
-        gc#a_mgrGetVer: mgr_getver                      'codeversion abfragen
-        gc#a_mgrReboot: reboot                          'neu starten
+        gc#a_mgrALoad:       mgr_aload                  'neuen code booten
+        gc#a_mgrGetCogs:     mgr_getcogs                'freie cogs abfragen
+        gc#a_mgrGetVer:      mgr_getver                 'codeversion abfragen
+        gc#a_mgrReboot:      reboot                     'neu starten
 
 '       ----------------------------------------------  HSS-FUNKTIONEN
 #ifdef __ADM_HSS
-        gc#a_hssLoad: hss_load                          'hss-datei in puffer laden
+        gc#a_hssLoad:    hss_load                       'hss-datei in puffer laden
 #ifdef __ADM_HSS_PLAY
-        gc#a_hssPlay: hss.hmus_load(@bgmusic)           'play
-                      hss.hmus_play
+        gc#a_hssPlay:    hss.hmus_load(@bgmusic)        'play
+                         hss.hmus_play
 #endif '__ADM_HSS_PLAY
-        gc#a_hssStop: hss.hmus_stop                     'stop
-        gc#a_hssPause: hss.hmus_pause                   'pause
-        gc#a_hssPeek: hss_peek                          'register lesen
-        gc#a_hssIntReg: hss_intreg                      'interfaceregister auslesen
-        gc#a_hssVol: hss_vol                            'lautstärke setzen
-        gc#a_sfxFire: sfx_fire                          'sfx abspielen
+        gc#a_hssStop:    hss.hmus_stop                  'stop
+        gc#a_hssPause:   hss.hmus_pause                 'pause
+        gc#a_hssPeek:    hss_peek                       'register lesen
+        gc#a_hssIntReg:  hss_intreg                     'interfaceregister auslesen
+        gc#a_hssVol:     hss_vol                        'lautstärke setzen
+        gc#a_sfxFire:    sfx_fire                       'sfx abspielen
         gc#a_sfxSetSlot: sfx_setslot                    'sfx-slot setzen
-        gc#a_sfxKeyOff: sfx_keyoff
-        gc#a_sfxStop: sfx_stop
+        gc#a_sfxKeyOff:  sfx_keyoff
+        gc#a_sfxStop:    sfx_stop
 #endif '__ADM_HSS
 
 '       ----------------------------------------------  PLX-Funktionen
 #ifdef __ADM_PLX
-        gc#a_plxRun: plx.run                            'plx-bus freigeben
-        gc#a_plxHalt: plx.halt                          'plx-bus anfordern
-        gc#a_plxIn: plx_in                              'port einlesen
-        gc#a_plxOut: plx_out                            'port ausgeben
-        gc#a_plxCh: plx_ch                              'ad-wandler auslesen
+        gc#a_plxRun:    plx.run                         'plx-bus freigeben
+        gc#a_plxHalt:   plx.halt                        'plx-bus anfordern
+        gc#a_plxIn:     plx_in                          'port einlesen
+        gc#a_plxOut:    plx_out                         'port ausgeben
+        gc#a_plxCh:     plx_ch                          'ad-wandler auslesen
         gc#a_plxGetReg: plx_getReg                      'poller-register lesen
         gc#a_plxSetReg: plx_setReg                      'poller-register setzen
-        gc#a_plxStart: plx.start                        'i2c-dialog starten
-        gc#a_plxStop: plx.stop                          'i2c-dialog beenden
-        gc#a_plxWrite: plx_write                        'i2c byte senden
-        gc#a_plxRead: plx_read                          'i2c byte empfangen
-        gc#a_plxPing: plx_ping                          'abfrage ob device vorhanden ist
+        gc#a_plxStart:  plx.start                       'i2c-dialog starten
+        gc#a_plxStop:   plx.stop                        'i2c-dialog beenden
+        gc#a_plxWrite:  plx_write                       'i2c byte senden
+        gc#a_plxRead:   plx_read                        'i2c byte empfangen
+        gc#a_plxPing:   plx_ping                        'abfrage ob device vorhanden ist
         gc#a_plxSetAdr: plx_setAddr                     'adressen adda/ports für poller setzen
 '       ----------------------------------------------  GAMEDEVICES
-        gc#a_Joy: joy_get                               'Joystick abfragen (1 x 8bit Port)
+        gc#a_Joy:       plx_get_joy                     'Joystick abfragen (1 x 8bit Port)
+        gc#a_Paddle:    plx_get_paddle                  'Paddle abfragen (1 x 8bit Port 1 x Analog)
+        gc#a_Pad:       plx_get_pad                     'Pad abfragen (1 x 8bit Port 2 x Analog)
+'       ----------------------------------------------  Venatrix-Plexus
+        gc#a_VexPut:    plx_put_vex                     'Register im Venatrix-Plexus schreiben
+        gc#a_VexGet:    plx_get_vex                     'Register im Venatrix-Plexus lesen
 #endif '__ADM_PLX
 
 '       ----------------------------------------------  WAV-FUNKTIONEN
 #ifdef __ADM_WAV
-        gc#a_sdwStart: sdw_start                        'spielt wav-datei direkt von sd-card ab
-        gc#a_sdwStop: sdw_stop                          'stopt wav-cog
-        gc#a_sdwStatus: sdw_status                      'fragt status des players ab
-        gc#a_sdwLeftVol: sdw_leftvol                    'lautstärke links
+        gc#a_sdwStart:    sdw_start                     'spielt wav-datei direkt von sd-card ab
+        gc#a_sdwStop:     sdw_stop                      'stopt wav-cog
+        gc#a_sdwStatus:   sdw_status                    'fragt status des players ab
+        gc#a_sdwLeftVol:  sdw_leftvol                   'lautstärke links
         gc#a_sdwRightVol: sdw_rightvol                  'lautstärke rechts
-        gc#a_sdwPause: sdw_pause                        'player pause/weiter-modus
+        gc#a_sdwPause:    sdw_pause                     'player pause/weiter-modus
         gc#a_sdwPosition: sdw_position
 #endif '__ADM_WAV
 
 '       ----------------------------------------------  SIDCog: DMP-Player-Funktionen (SIDCog2)
 #ifdef __ADM_SID
-        gc#a_s_mdmpplay: sid_mdmpplay                     'dmp-file mono auf sid2 abspielen
-        gc#a_s_sdmpplay: sid_sdmpplay                     'dmp-file stereo auf beiden sids abspielen
-        gc#a_s_dmpstop: sid_dmpstop                       'dmp-player beenden
-        gc#a_s_dmppause: sid_dmppause                     'dmp-player pausenmodus
-        gc#a_s_dmpstatus: sid_dmpstatus                   'dmp-player statusabfrage
-        gc#a_s_dmppos: sid_dmppos                         'player-position im dumpfile
-        gc#a_s_mute: sid_mute                             'alle register löschen
+        gc#a_s_mdmpplay:  sid_mdmpplay                  'dmp-file mono auf sid2 abspielen
+        gc#a_s_sdmpplay:  sid_sdmpplay                  'dmp-file stereo auf beiden sids abspielen
+        gc#a_s_dmpstop:   sid_dmpstop                   'dmp-player beenden
+        gc#a_s_dmppause:  sid_dmppause                  'dmp-player pausenmodus
+        gc#a_s_dmpstatus: sid_dmpstatus                 'dmp-player statusabfrage
+        gc#a_s_dmppos:    sid_dmppos                    'player-position im dumpfile
+        gc#a_s_mute:      sid_mute                      'alle register löschen
 
 '       ----------------------------------------------  SIDCog1-Funktionen
-        gc#a_s1_setRegister: sid1.setRegister(bus_getchar,bus_getchar)
-        gc#a_s1_updateRegisters: sid1.updateRegisters(sub_getdat(25,@s1buffer))
-        gc#a_s1_setVolume: sid1.setVolume(bus_getchar)
-        gc#a_s1_play: sid1.play(bus_getchar,sub_getlong,bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
-        gc#a_s1_noteOn: sid1.noteOn(bus_getchar, sub_getlong)
-        gc#a_s1_noteOff: sid1.noteOff(bus_getchar)
-        gc#a_s1_setFreq: sid1.setFreq(bus_getchar,sub_getlong)
-        gc#a_s1_setWaveform: sid1.setWaveform(bus_getchar,bus_getchar)
-        gc#a_s1_setPWM: sid1.setPWM(bus_getchar,sub_getlong)
-        gc#a_s1_setADSR: sid1.setADSR(bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
-        gc#a_s1_setResonance: sid1.setResonance(bus_getchar)
-        gc#a_s1_setCutoff: sid1.setCutoff(sub_getlong)
-        gc#a_s1_setFilterMask: sid1.setFilterMask(bus_getchar,bus_getchar,bus_getchar)
-        gc#a_s1_setFilterType: sid1.setFilterType(bus_getchar,bus_getchar,bus_getchar)
-        gc#a_s1_enableRingmod: sid1.enableRingmod(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_setRegister:           sid1.setRegister(bus_getchar,bus_getchar)
+        gc#a_s1_updateRegisters:       sid1.updateRegisters(sub_getdat(25,@s1buffer))
+        gc#a_s1_setVolume:             sid1.setVolume(bus_getchar)
+        gc#a_s1_play:                  sid1.play(bus_getchar,sub_getlong,bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_noteOn:                sid1.noteOn(bus_getchar, sub_getlong)
+        gc#a_s1_noteOff:               sid1.noteOff(bus_getchar)
+        gc#a_s1_setFreq:               sid1.setFreq(bus_getchar,sub_getlong)
+        gc#a_s1_setWaveform:           sid1.setWaveform(bus_getchar,bus_getchar)
+        gc#a_s1_setPWM:                sid1.setPWM(bus_getchar,sub_getlong)
+        gc#a_s1_setADSR:               sid1.setADSR(bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_setResonance:          sid1.setResonance(bus_getchar)
+        gc#a_s1_setCutoff:             sid1.setCutoff(sub_getlong)
+        gc#a_s1_setFilterMask:         sid1.setFilterMask(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_setFilterType:         sid1.setFilterType(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s1_enableRingmod:         sid1.enableRingmod(bus_getchar,bus_getchar,bus_getchar)
         gc#a_s1_enableSynchronization: sid1.enableSynchronization(bus_getchar,bus_getchar,bus_getchar)
 
 '       ----------------------------------------------  SIDCog2-Funktionen
-        gc#a_s2_setRegister: sid2.setRegister(bus_getchar,bus_getchar)
-        gc#a_s2_updateRegisters: sid2.updateRegisters(sub_getdat(25,@s1buffer))
-        gc#a_s2_setVolume: sid2.setVolume(bus_getchar)
-        gc#a_s2_play: sid2.play(bus_getchar,sub_getlong,bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
-        gc#a_s2_noteOn: sid2.noteOn(bus_getchar, sub_getlong)
-        gc#a_s2_noteOff: sid2.noteOff(bus_getchar)
-        gc#a_s2_setFreq: sid2.setFreq(bus_getchar,sub_getlong)
-        gc#a_s2_setWaveform: sid2.setWaveform(bus_getchar,bus_getchar)
-        gc#a_s2_setPWM: sid2.setPWM(bus_getchar,sub_getlong)
-        gc#a_s2_setADSR: sid2.setADSR(bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
-        gc#a_s2_setResonance: sid2.setResonance(bus_getchar)
-        gc#a_s2_setCutoff: sid2.setCutoff(sub_getlong)
-        gc#a_s2_setFilterMask: sid2.setFilterMask(bus_getchar,bus_getchar,bus_getchar)
-        gc#a_s2_setFilterType: sid2.setFilterType(bus_getchar,bus_getchar,bus_getchar)
-        gc#a_s2_enableRingmod: sid2.enableRingmod(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_setRegister:           sid2.setRegister(bus_getchar,bus_getchar)
+        gc#a_s2_updateRegisters:       sid2.updateRegisters(sub_getdat(25,@s1buffer))
+        gc#a_s2_setVolume:             sid2.setVolume(bus_getchar)
+        gc#a_s2_play:                  sid2.play(bus_getchar,sub_getlong,bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_noteOn:                sid2.noteOn(bus_getchar, sub_getlong)
+        gc#a_s2_noteOff:               sid2.noteOff(bus_getchar)
+        gc#a_s2_setFreq:               sid2.setFreq(bus_getchar,sub_getlong)
+        gc#a_s2_setWaveform:           sid2.setWaveform(bus_getchar,bus_getchar)
+        gc#a_s2_setPWM:                sid2.setPWM(bus_getchar,sub_getlong)
+        gc#a_s2_setADSR:               sid2.setADSR(bus_getchar,bus_getchar,bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_setResonance:          sid2.setResonance(bus_getchar)
+        gc#a_s2_setCutoff:             sid2.setCutoff(sub_getlong)
+        gc#a_s2_setFilterMask:         sid2.setFilterMask(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_setFilterType:         sid2.setFilterType(bus_getchar,bus_getchar,bus_getchar)
+        gc#a_s2_enableRingmod:         sid2.enableRingmod(bus_getchar,bus_getchar,bus_getchar)
         gc#a_s2_enableSynchronization: sid2.enableSynchronization(bus_getchar,bus_getchar,bus_getchar)
 
 '       ----------------------------------------------  SID Zusatzfunktionen
-        gc#a_s2_resetRegisters: sid2.resetRegisters
-        gc#a_s1_resetRegisters: sid1.resetRegisters
+        gc#a_s2_resetRegisters:        sid2.resetRegisters
+        gc#a_s1_resetRegisters:        sid1.resetRegisters
         gc#a_s_beep: sid_beep
-        gc#a_s_dmpreg: sid_dmpreg                                 'soundinformationen senden
+        gc#a_s_dmpreg:                 sid_dmpreg       'soundinformationen senden
 #endif '__ADM_SID
 
 '       ----------------------------------------------  AY-SOUNDFUNKTIONEN
 #ifdef __ADM_AYS
-        gc#a_ayStart: ay_start
-        gc#a_ayStop: ay_stop
+        gc#a_ayStart:           ay_start
+        gc#a_ayStop:            ay_stop
         gc#a_ayUpdateRegisters: ay_updateRegisters
 #endif '__ADM_AYS
 
@@ -655,7 +660,7 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
   clr_dmarker                                           'dir-marker löschen
   sdfat.FATEngine
   repeat
-    waitcnt(cnt + clkfreq/10)
+    waitcnt(cnt + clkfreq)
   until sd_mount("B") == 0
   'err := sd_mount("B")
   'siglow(err)
@@ -694,6 +699,7 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
 #endif '__ADM_COM
 
 #ifdef __ADM_PLX
+  'plx-bus initialisieren
   plx.init                                              'defaultwerte setzen, poller-cog starten
   plx.run                                               'plexbus freigeben (poller läuft)
 #endif '__ADM_PLX
@@ -1378,7 +1384,7 @@ PRI sd_del | err                                        'sdcard: eine datei oder
 
    sub_getstr
    err := \sdfat.deleteEntry(@tbuf)
-   sighigh(err)                                         'fehleranzeige
+   siglow(err)                                         'fehleranzeige
    bus_putchar(err)                                     'ergebnis der operation senden
 
 PRI sd_rename | err                                     'sdcard: datei oder verzeichnis umbenennen
@@ -2426,13 +2432,34 @@ PRI plx_setAddr | adda, ports                           'adressen adda/ports fü
     ports := bus_getchar                                'address ports
     plx.setadr(adda,ports)
 
-PRI joy_get | reg                                       'Joystick abfragen (1 x 8bit Port)
+PRI plx_get_joy                                         'Joystick abfragen (1 x 8bit Port)
 
-    reg:=bus_getchar                                    '0-6
-    if reg>3 and reg<7
-       bus_putchar(!plx.getreg(reg))
-    else
-       bus_putchar(plx.getreg(reg))
+    bus_putchar(!plx.getreg(plx#R_INP0))
+
+PRI plx_get_paddle                                      'Paddle abfragen (1 x 8bit Port 1 x Analog)
+
+    bus_putchar(!plx.getreg(plx#R_INP0))
+    bus_putchar(plx.getreg(plx#R_PAD0))
+
+PRI plx_get_pad                                         'Pad abfragen (1 x 8bit Port 2 x Analog)
+
+    bus_putchar(!plx.getreg(plx#R_INP0))
+    bus_putchar(plx.getreg(plx#R_PAD0))
+    bus_putchar(plx.getreg(plx#R_PAD1))
+
+PRI plx_put_vex | data, reg, addr                       'Register im Venatrix-Plexus schreiben
+
+    data := bus_getchar               'datum empfangen
+    reg  := bus_getchar               'registernummer empfangen
+    addr := bus_getchar               'device-adresse ampfangen
+    plx.vexput(data,reg,addr)
+
+PRI plx_get_vex | reg, addr                             'Register im Venatrix-Plexus lesen
+
+    reg  := bus_getchar               'registernummer empfangen
+    addr := bus_getchar               'device-adresse empfangen
+    bus_putchar(plx.vexget(reg,addr))
+
 
 CON ''------------------------------------------------- End of DCF77 FUNCTIONS
 

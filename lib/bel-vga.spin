@@ -20,17 +20,32 @@
 
 CON
 
-' 1024 x 768 @ 60Hz settings
 
+' 1024 x 768 @ H:48KHz V:60Hz settings
+#ifdef __VGA_MONSET1
   hp = 1024                     'horizontal pixels
   vp = 768                      'vertical pixels
   hf = 24                       'horizontal front porch pixels
-  hs = 136                       'horizontal sync pixels
+  hs = 136                      'horizontal sync pixels
   hb = 160                      'horizontal back porch pixels
   vf = 3                        'vertical front porch lines
   vs = 6                        'vertical sync lines
   vb = 29                       'vertical back porch lines
   pr = 65                       'pixel rate in MHz at 80MHz system clock (5MHz granularity)
+#endif __VGA_MONSET1
+
+' 1024 x 768 @ H:45KHz V:57Hz settings
+#ifdef __VGA_MONSET2
+  hp = 1024                     'horizontal pixels
+  vp = 768                      'vertical pixels
+  hf = 16                       'horizontal front porch pixels
+  hs = 96                       'horizontal sync pixels
+  hb = 176                      'horizontal back porch pixels
+  vf = 1                        'vertical front porch lines
+  vs = 3                        'vertical sync lines
+  vb = 28                       'vertical back porch lines
+  pr = 60                       'pixel rate in MHz at 80MHz system clock (5MHz granularity)
+#endif __VGA_MONSET2
 
   ht = hp + hf + hs + hb        'total scan line pixels
 

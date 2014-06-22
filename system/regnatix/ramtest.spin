@@ -79,13 +79,15 @@ PUB main | tast
 PUB statistik                                           'ausgabe der fehlerstatistik
 
   cnt_err := cnt_err + cnt_test1 + cnt_test2 + cnt_test3 + cnt_testx
-  ios.setcolor(4)
+  ios.setcolor(0)
   ios.printcls
   ios.printnl
   ios.print(string("Statistik eRAM-Test:", $0d, $0d))
   ios.print(string("Testdurchläufe                  : "))
   ios.printdec(cnt_loop)
   ios.printnl
+  ios.printnl
+  ios.setcolor(4)
   ios.print(string("Fehler Gesamt                   : "))
   ios.printdec(cnt_err)
   ios.printnl
@@ -100,9 +102,6 @@ PUB statistik                                           'ausgabe der fehlerstati
   ios.printnl
   ios.print(string("Fehler Test Div. Testmuster     : "))
   ios.printdec(cnt_testx)
-  ios.printnl
-  ios.printnl
-  ios.print(string("Aktueller Test:", $0d))
   ios.printnl
   ios.printnl
   cnt_test1 := 0

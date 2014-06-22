@@ -60,7 +60,7 @@ CON
   ERRSOCKETCLOSED = ERR - 3     ' socket closed, could not perform operation
 
 OBJ
-  nic : "driver_enc28j60"
+  nic : "adm-enc28j60"
 
   'ser : "SerialMirror"
   'stk : "Stack Length"

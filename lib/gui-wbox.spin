@@ -14,7 +14,7 @@ Chip            : Regnatix
 Typ             : Programm
 Version         : 
 Subversion      : 
-Funktion        :
+Funktion        : Warndialog mit zwei Buttons
 Komponenten     : -
 COG's           : -
 Logbuch         :
@@ -64,10 +64,14 @@ PUB draw(stradr1,stradr2,stradr3):button | key,bnr
     draw_buttons(stradr2,stradr3,bnr)
     key := ios.keywait
     case key
-      gc#KEY_CURLEFT:           bnr := 1
-      gc#KEY_CURRIGHT:          bnr := 2
+      gc#KEY_CURLEFT:  bnr := 1
+      gc#KEY_CURRIGHT: bnr := 2
+      gc#KEY_TAB:      case bnr
+                         1: bnr := 2
+                         2: bnr := 1
+      gc#KEY_ESC:      bnr := 0
 
-  until key == gc#KEY_RETURN
+  until (key == gc#KEY_RETURN) or (key ==  gc#KEY_ESC)
   return bnr
 
 PRI draw_buttons(stradr2,stradr3,bnr)

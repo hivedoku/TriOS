@@ -687,7 +687,7 @@ PRI cmd_color                                           'cmd: zeichenfarbe wähl
 
   ios.setcolor(str.decimalToNumber(act_color := os_nxtoken1))
   
-PRI cmd_sysinfo                                         'cmd: systeminformationen anzeigen
+PRI cmd_sysinfo|ack,adr                                 'cmd: systeminformationen anzeigen
 
   ios.printnl
   os_printstr(@msg22,@syst)
@@ -715,6 +715,18 @@ PRI cmd_sysinfo                                         'cmd: systeminformatione
     os_printstr(@msg36,@msg37)
   else
     os_printstr(@msg36,@msg38)
+
+  ios.printnl
+  ios.print(@msg39)
+  ios.plxHalt
+  repeat adr from 0 to 127
+    ack := ios.plxping(adr)
+    ifnot ack
+      ios.print(string(" ["))
+      ios.printhex(adr,2)
+      ios.print(string("]"))
+  ios.printnl
+  ios.plxRun
 
 PRI cmd_mount | err                                     'cmd: mount
 
@@ -873,17 +885,17 @@ PRI cmd_dir|fcnt,stradr,hflag                           'cmd: verzeichnis anzeig
     ios.print(@msg10)                                   
     ios.print(@msg5)
     ios.print(ios.sdvolname)
-    ifnot ios.os_error(ios.sddir)                       'verzeichnis öffnen
-      if str.findCharacter(stradr,"h")
-        hflag := 0
-      if str.findCharacter(stradr,"w")
-        fcnt := cmd_dir_w(hflag)
-      else
-        fcnt := cmd_dir_l(hflag)                        'dir l
-      ios.printnl
-      ios.print(@msg10)
-      ios.print(@msg9)
-      ios.printdec(fcnt)
+    ios.sddir                                          'verzeichnis öffnen
+    if str.findCharacter(stradr,"h")
+      hflag := 0
+    if str.findCharacter(stradr,"w")
+      fcnt := cmd_dir_w(hflag)
+    else
+      fcnt := cmd_dir_l(hflag)                        'dir l
+    ios.printnl
+    ios.print(@msg10)
+    ios.print(@msg9)
+    ios.printdec(fcnt)
   else
     ios.os_error(1)
 
@@ -1076,6 +1088,7 @@ msg35         byte  "Bellatrix  Auflösung Y   :",0
 msg36         byte  "Bellatrix  Videomodus    : ",0
 msg37         byte  "VGA",0
 msg38         byte  "TV",0
+msg39         byte  "PlexBus Devices : ",0
 
 ext1          byte  ".BIN",0
 ext2          byte  ".ADM",0

@@ -1,25 +1,33 @@
 INHALT
 ======
 
-1. Installation des Grundsystems
-2. Regime im Überblick
-3. Forth im Überblick
+1. Installations-Varianten
+2. Installation des Grundsystems
+3. Regime im Überblick
+4. Forth im Überblick
 
 
+1. Installations-Varianten
+==========================
 
+Zur Installation von TriOS auf dem Hive stehen 3 verschiedene Varianten zur
+Verfügung, welche am Ende aber dasselbe Ergebnis erzielen:
 
-1. Installation des Grundsystems:
-=================================
+Binäres Archiv: HIVE-TriOS-Rxx-bin.zip
+Source-Archiv:  HIVE-TriOS-Rxx-src.zip
+Git Repository: https://dev.bitquell.de/summary/HIVE/TriOS.git
 
-TriOS kann in zwei Versionen installiert werden: Mit oder ohne Forth als
-integrierte Programmiersprache. Als Standard wird das System ohne Forth
-installiert. Die Installation ist so für den Einsteiger einfacher. Möchte
-man auch PropForth installieren, muß nur eine Konfiguration geändert werden
-und ein Basiswortschatz im Forth selbst kompiliert werden.
+Das binäre Archiv kann sofort installiert werden. Wer selbst an den Quellen
+Änderungen vornehmen, sollte stattdessen das Source-Archiv nutzen oder gleich
+das top-aktuelle Git Repository nutzen.
+
+Bei Nutzung des Source-Archives oder des Git-Repository müssen die Quellen vor
+der Installation noch compiliert werden.
 
 WICHTIG: Das System kann nur mit Brat's Spin Tool - kurz BST - compiliert
-werden. In den Einstellungen des Compilers (Tools/Compiler
-Preferences/Search Paths) muss das lib-Verzeichnis eingetragen werden.
+werden. In den Einstellungen des Compilers
+(Tools/Compiler Preferences/Search Paths) muss das lib-Verzeichnis eingetragen
+werden.
 
 Downloadlink BST: http://www.fnarfbargle.com/bst.html 
 
@@ -28,6 +36,16 @@ Zum einfachen Compilieren des Gesamtsystems steht für Windows die Batch-Datei
 Voraussetzung ist, daß sich die Commandline-Version des Compilers (bstc) im
 Pfad befindet.
 Downloadlink BSTC: http://www.fnarfbargle.com/bst/bstc/Latest/
+
+
+2. Installation des Grundsystems:
+=================================
+
+TriOS kann in zwei Versionen installiert werden: Mit oder ohne Forth als
+integrierte Programmiersprache. Als Standard wird das System ohne Forth
+installiert. Die Installation ist so für den Einsteiger einfacher. Möchte
+man auch PropForth installieren, muß nur ein Basiswortschatz im Forth selbst
+kompiliert werden.
 
 
 Installation ohne Forth (Standard):
@@ -185,7 +203,7 @@ tv.bin          - TV-Textmodus 40 x 13 Zeichen
 
 
 
-2. Forth im Überblick:
+4. Forth im Überblick:
 ======================
 
 Einige nützliche Kommandos befinden sich in dem Modul tools.mod. In den meisten

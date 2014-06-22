@@ -14,7 +14,7 @@ Chip            : Regnatix
 Typ             : Programm
 Version         : 
 Subversion      : 
-Funktion        :
+Funktion        : Infodialog mit Fortschrittsbalken
 Komponenten     : -
 COG's           : -
 Logbuch         :

@@ -55,6 +55,7 @@ PUB main | i,n,len,ch,lch
   repeat i from 0 to 3                                  'extender anhängen
     byte[@parastr][len + i] := byte[@ext1][i]
   byte[@parastr][len + i] := 0
+  ios.admsetsyssnd(0)                                   'systemklänge aus (nervt!)
   ifnot ios.sdopen("r",@parastr)
     repeat                                              'text ausgeben
       ch := ios.sdgetc
@@ -78,6 +79,7 @@ PUB main | i,n,len,ch,lch
     'ios.print(string("Hilfetexte : ",$0d))
     cmd_dir_w(1)
   ios.sdclose                                           'datei schließen
+  ios.admsetsyssnd(1)                                   'systemklänge wieder ein
   ios.sddmact(ios#DM_USER)                              'u-marker aktivieren
   ios.stop
 

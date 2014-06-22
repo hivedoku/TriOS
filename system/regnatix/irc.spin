@@ -39,7 +39,7 @@ OBJ
         str: "glob-string"
         num: "glob-numbers"        'Number Engine
         gc : "glob-con"
-        led: "led-engine"
+        led: "glob-led-engine"
 
 CON
 

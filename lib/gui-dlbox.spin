@@ -14,7 +14,7 @@ Chip            : Regnatix
 Typ             : Programm
 Version         : 
 Subversion      : 
-Funktion        :
+Funktion        : Fenster mit Dateiliste
 Komponenten     : -
 COG's           : -
 Logbuch         :
@@ -79,10 +79,28 @@ PUB redraw | i
       i++
     ios.printnl
 
-PUB setpos(pos)
+PUB setpos(npos)|opos,i,col,row
 
-  box_pos := pos
-  redraw
+  opos    := box_pos
+  box_pos := npos
+
+'  redrawx(npos,opos)
+
+  ios.winset(box_win)
+
+  'alte position neu zeichnen
+  row := opos / box_cols
+  col := (opos - (row * box_cols)) * (fm#MAX_LEN + 2)
+  ios.wincursety(row)
+  ios.wincursetx(col)
+  print_file(box_view + opos, opos)
+
+  'neue position neu zeichnen
+  row := npos / box_cols
+  col := (npos - (row * box_cols)) * (fm#MAX_LEN + 2)
+  ios.wincursety(row)
+  ios.wincursetx(col)
+  print_file(box_view + npos, npos)
 
 PUB setview(view)
 

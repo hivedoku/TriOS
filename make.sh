@@ -25,7 +25,7 @@ mkdir ${flash}
 # Flashdateien erzeugen
 # --> bin/flash
 
-${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_HSS -D __ADM_HSS_PLAY -D __ADM_WAV -D __ADM_RTC -D __ADM_COM -b -O a flash/administra/admflash.spin
+${BSTC} -L ${libpath} ${D} -D __ADM_FAT -D __ADM_HSS -D __ADM_HSS_PLAY -D __ADM_WAV -D __ADM_RTC -D __ADM_COM -D __ADM_PLX -b -O a flash/administra/admflash.spin
 cp admflash.binary ${flash}
 mv admflash.binary ${sdsys}/admsys.adm
 

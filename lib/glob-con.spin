@@ -47,6 +47,12 @@ CON 'Signaldefinitionen --------------------------------------------------------
 #21,    A_Bluetooth_Line                              'Key-Line des HC05-Bluetooth-Moduls
 #23,    A_SELECT                                      'administra-auswahlsignal
 
+'plexbus
+adm_sda  = 19                                           'i2c-datenpin
+adm_scl  = 20                                           'i2c-clockpin
+adm_int1 = 21                                           'interrupt port 1&2
+adm_int2 = 22                                           'interrupt port 3
+
 CON 'KEY_CODES -------------------------------------------------------------------------------------
 
 KEY_CTRL        = 2
@@ -253,6 +259,14 @@ A_BLT           = %00000000_00000000_00001000_00000000
         a_Pad                                           'Pad abfragen (1 x 8bit Port 2 x Analog)
         a_SetJoy                                        'Port für Joystick setzen
         a_SetPad                '137                    'Chan für Pad setzen
+'       ----------------------------------------------  Venatrix-Propeller-Slave
+        a_VexPut                                        'Register im Venatrix-Plexus schreiben
+        a_VexGet                '139                    'Register im Venatrix-Plexus lesen
+
+'       ----------------------------------------------  AY-SOUNDFUNKTIONEN
+#147,   a_ayStart
+        a_ayStop
+        a_ayUpdateRegisters     '149
 
 '       ----------------------------------------------  WAV-FUNKTIONEN
 #150,   a_sdwStart                                      'spielt wav-datei direkt von sd-card ab
@@ -314,10 +328,8 @@ A_BLT           = %00000000_00000000_00001000_00000000
         a_s_beep
         a_s_dmpreg          '199                       'soundinformationen senden
 
-'       ----------------------------------------------  AY-SOUNDFUNKTIONEN
-#200,   a_ayStart
-        a_ayStop
-        a_ayUpdateRegisters
+'       ----------------------------------------------  Eigene Erweiterungen
+'       200 ... 254                                     frei für eigene Erweiterungen
 
 CON 'BELLATRIX-FUNKTIONEN --------------------------------------------------------------------------
 

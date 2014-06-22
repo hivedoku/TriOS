@@ -18,21 +18,23 @@ Funktion        :
 Komponenten     : -
 COG's           : -
 Logbuch         :
+
+27-04-2013-dr235  - erste version
+01-11-2013-dr235  - redraw/geschwindigkeit verbessert
+                  - div. kleine Optimierungen und Detailverbesserungen
+
 Kommandoliste   :
 Notizen         :
-
-- view nach f9
-- tab in wbox
 
 }}
 
 OBJ
 
   ios      : "reg-ios"
-  dlbox[2] : "gui-dlbox"
-  pbar     : "gui-pbar"
-  wbox     : "gui-wbox"
-  input    : "gui-input"
+  dlbox[2] : "gui-dlbox"        'die beiden dateifenster
+  pbar     : "gui-pbar"         'progress-bar
+  wbox     : "gui-wbox"         'warnbox
+  input    : "gui-input"        'eingabedialog
   fm       : "fm-con"
   gc       : "glob-con"
   str      : "glob-string"
@@ -53,51 +55,48 @@ VAR
   byte  w_pos[2]                'positionen im fenster
   byte  w_view[2]               'startposition des fensters
   byte  w_cols[2]               'anzahl der spalten im fenster
-  byte  w_drives[2]             'zugeordnete drives
 
-  byte  w0_list[fm#MAX_BUFFER]  'aktuelles verzeichnis
-  byte  w0_flags[fm#MAX_FILES]  'selected, directory usw.
+  byte  w0_list[fm#MAX_BUFFER]  'verzeichnisliste sdcard
+  byte  w0_flags[fm#MAX_FILES]  'flags (selktiert, typ)
   long  w0_len[fm#MAX_FILES]    'dateilängen
-  byte  w0_number               'anzahl der files
+  byte  w0_number               'anzahl der dateien
 
-  byte  w1_list[fm#MAX_BUFFER]
-  byte  w1_flags[fm#MAX_FILES]
-  long  w1_len[fm#MAX_FILES]
-  byte  w1_number
+  byte  w1_list[fm#MAX_BUFFER]  'verzeichnisliste ramdrive
+  byte  w1_flags[fm#MAX_FILES]  'flags
+  long  w1_len[fm#MAX_FILES]    'dateilängen
+  byte  w1_number               'anzahl der dateien
 
 PUB main | key
 
   init
-  dlbox[0].focus
-  dlbox[0].draw
-  dlbox[1].draw
-  info_print
-
   repeat
     key := ios.keywait
     case key
-      gc#KEY_CURUP:             f_curup
-      gc#KEY_CURDOWN:           f_curdown
-      gc#KEY_CURLEFT:           f_curleft
-      gc#KEY_CURRIGHT:          f_curright
-      gc#KEY_PAGEUP:            f_pageup
-      gc#KEY_PAGEDOWN:          f_pagedown
-      gc#KEY_RETURN:            f_open
-      gc#KEY_BS:                f_back
-      gc#KEY_SPACE:             f_select
-      gc#KEY_ESC:
-      gc#KEY_TAB:               f_focus
-      gc#KEY_POS1:              f_pos1
-      gc#KEY_F01:               f_view
-      gc#KEY_F02:               f_del
-      gc#KEY_F03:               f_load
-      gc#KEY_F04:               f_save
-      gc#KEY_F05:               f_empty
-      gc#KEY_F06:               f_mount
-      gc#KEY_F07:               f_mkdir
-      gc#KEY_F08:               f_selall
-      gc#KEY_F09:               f_full
-      gc#KEY_F10:               f_quit
+      gc#KEY_CURUP:     f_curup
+      gc#KEY_CURDOWN:   f_curdown
+      gc#KEY_CURLEFT:   f_curleft
+      gc#KEY_CURRIGHT:  f_curright
+      gc#KEY_PAGEUP:    f_pageup
+      gc#KEY_PAGEDOWN:  f_pagedown
+      gc#KEY_RETURN:    f_open
+      gc#KEY_BS:        f_back
+      gc#KEY_SPACE:     f_select
+      gc#KEY_ESC:       f_menu
+      gc#KEY_TAB:       f_focus
+      gc#KEY_POS1:      f_pos1
+      gc#KEY_F01:       f_view
+      gc#KEY_F02:       f_del
+      gc#KEY_F03:       f_load
+      gc#KEY_F04:       f_save
+      gc#KEY_F05:       f_empty
+      gc#KEY_F06:       f_mount
+      gc#KEY_F07:       f_mkdir
+      gc#KEY_F08:       f_selall
+      gc#KEY_F09:       f_full
+      gc#KEY_F10:       f_quit
+      "m":              f_menu
+      "q":              f_quit
+
 
 PRI init
 
@@ -112,8 +111,6 @@ PRI init
   w_view[0] := w_view[1] := 0
   w_cols[0] := (fm#W1X2-fm#W1X1)/(fm#MAX_LEN+2)
   w_cols[1] := (fm#W2X2-fm#W2X1)/(fm#MAX_LEN+2)
-  w_drives[0] := fm#DR_SD
-  w_drives[1] := fm#DR_RAM
   fname[0] := 0
 
   frame_draw
@@ -128,19 +125,24 @@ PRI init
   wbox.define(5,fm#W4X1,fm#W4Y1,fm#W4X2,fm#W4Y2)
   input.define(6,fm#W4X1,fm#W4Y1,fm#W4X2,fm#W4Y2,12)
 
+  dlbox[0].focus
+  dlbox[0].draw
+  dlbox[1].draw
+  info_print
 
-PRI f_mount
+
+PRI f_mount                                             'fkt: mount/unmount sd-card
 
   if fl_mounted
     ios.sdunmount
     repeat
-      wbox.draw(@str5,@str2,@str3) == 1
+      wbox.draw(@str5,@str2,@str6)
     while ios.sdmount
   dlbox[0].draw
   dlbox[1].draw
   info_print
 
-PRI f_mkdir
+PRI f_mkdir                                             'fkt: verzeichnis erstellen
 
   ios.sdnewdir(input.draw(string("Name eingeben : ")))
   w0_clrlist
@@ -149,22 +151,24 @@ PRI f_mkdir
   dlbox[1].draw
   info_print
 
-PRI f_selall | i
+PRI f_selall | i                                        'fkt: alle dateien im verzeichnis selektieren
 
   i := 0
   case w_sel
-    0: repeat w0_number
+    0: i := 2 'std-einträge . .. auslassen
+       repeat w0_number
          w0_flags[i++] ^= fm#FL_SEL
-    1: repeat w1_number
+    1: i := 0
+       repeat w1_number
          w1_flags[i++] ^= fm#FL_SEL
   dlbox[w_sel].redraw
 
-PRI f_pos1
+PRI f_pos1                                              'fkt: homeposition im fenster
 
   w_pos[w_sel] := 0
   dlbox[w_sel].setpos(w_pos[w_sel])
 
-PRI f_full
+PRI f_full                                              'fkt: fenster maximieren
 
   if w_sel
     dlbox[1].defocus
@@ -181,7 +185,7 @@ PRI f_full
         dlbox[1].draw
   w_sel := 0
 
-PRI f_open
+PRI f_open                                              'fkt: verzeichnis öffnen
 
   'nur fenster 1 und verzeichnisse
   if (w_sel == 0) & (w0_flags[w_view[w_sel] + w_pos[w_sel]] & fm#FL_DIR)
@@ -191,7 +195,7 @@ PRI f_open
     dlbox[w_sel].draw
     info_print
 
-PRI f_back
+PRI f_back                                              'fkt: verzeichnisebene zurück
 
   ios.sdchdir(string(".."))
   w0_clrlist
@@ -199,7 +203,7 @@ PRI f_back
   dlbox[w_sel].redraw
   info_print
 
-PRI f_curup
+PRI f_curup                                             'fkt: cursor hoch
 
   if w_pos[w_sel] > 1
     w_pos[w_sel] -= dlbox[w_sel].getcols
@@ -207,7 +211,7 @@ PRI f_curup
   info_print
   dir := 0
 
-PRI f_curdown
+PRI f_curdown                                           'fkt: cursor runter
 
   if w_pos[w_sel] < (fm#WROWS * w_cols[w_sel] - dlbox[w_sel].getcols)
     w_pos[w_sel] += dlbox[w_sel].getcols
@@ -215,7 +219,7 @@ PRI f_curdown
   info_print
   dir := 1
 
-PRI f_curleft
+PRI f_curleft                                           'fkt: cursor links
 
   if w_pos[w_sel]
     w_pos[w_sel]--
@@ -223,7 +227,7 @@ PRI f_curleft
   info_print
   dir := 0
 
-PRI f_curright
+PRI f_curright                                          'fkt: cursor rechts
 
   if w_pos[w_sel] < (fm#WROWS * w_cols[w_sel] - 1)
     w_pos[w_sel]++
@@ -231,7 +235,7 @@ PRI f_curright
   info_print
   dir := 1
 
-PRI f_pageup
+PRI f_pageup                                            'fkt: seite zurück
 
   if (w_view[w_sel] - fm#WROWS * w_cols[w_sel]) => 0
     w_view[w_sel] -= fm#WROWS * w_cols[w_sel]
@@ -240,7 +244,7 @@ PRI f_pageup
   w_pos[w_sel] := fm#WROWS * w_cols[w_sel] - 1
   dlbox[w_sel].setpos(w_pos[w_sel])
 
-PRI f_pagedown | number
+PRI f_pagedown | number                                 'fkt: seite weiter
 
   case w_sel
     0: number := w0_number
@@ -252,18 +256,22 @@ PRI f_pagedown | number
   w_pos[w_sel] := 0
   dlbox[w_sel].setpos(w_pos[w_sel])
 
-PRI f_select | i
+PRI f_select | i                                        'fkt: datei selektieren
 
   i := w_view[w_sel] + w_pos[w_sel]
+  'flag in liste setzen
   case w_sel
     0: w0_flags[i] ^= fm#FL_SEL
     1: w1_flags[i] ^= fm#FL_SEL
-  dlbox[w_sel].redraw
+  'aktuelle position neu zeichnen
+  dlbox[w_sel].setpos(w_pos[w_sel])
+  'cursor bewegen
   case dir
     0: f_curleft
     1: f_curright
+  dlbox[w_sel].setpos(w_pos[w_sel])
 
-PRI f_focus
+PRI f_focus                                             'fkt: fokus auf anderes fenster
 
 ifnot fl_full
   dlbox[w_sel].defocus
@@ -274,14 +282,27 @@ ifnot fl_full
   dlbox[w_sel].focus
   info_print
 
-PRI f_quit
+PRI f_quit                                              'fkt: fm beenden
 
-  ios.sddmset(ios#DM_USER)  'regime soll in diesem verzeichnis landen
-  ios.winset(0)
-  ios.screeninit
-  ios.stop
+  if wbox.draw(@str7,@str3,@str2) == 2
+    ios.sddmset(ios#DM_USER)  'regime soll in diesem verzeichnis landen
+    ios.winset(0)
+    ios.screeninit
+    ios.stop
+  else
+    dlbox[0].draw
+    dlbox[1].draw
+    info_print
 
-PRI f_load | i
+PRI f_menu                                              'fkt: extra-menü aufrufen
+
+  wbox.draw(string("Menü: Nicht implementiert!"),string("ok"),@str6)
+  dlbox[0].draw
+  dlbox[1].draw
+  info_print
+
+
+PRI f_load | i                                          'fkt: sdcard --> ramdrive
 
   pbar.setmaxbar(w0_number)
   i := 0
@@ -297,7 +318,7 @@ PRI f_load | i
   dlbox[0].draw
   dlbox[1].draw
 
-PRI f_save | i
+PRI f_save | i                                          'fkt: ramdrive --> sdcard
 
   pbar.setmaxbar(w1_number)
   i := 0
@@ -313,7 +334,7 @@ PRI f_save | i
   dlbox[0].draw
   dlbox[1].draw
 
-PRI f_del | i
+PRI f_del | i                                           'fkt: dateien löschen
 
 if wbox.draw(@str1,@str2,@str3) == 1
   pbar.setmaxbar(w0_number)
@@ -331,7 +352,7 @@ dlbox[0].draw
 dlbox[1].draw
 info_print
 
-PRI f_empty
+PRI f_empty                                             'fkt: ramdrive löschen
 
 if wbox.draw(@str4,@str2,@str3) == 1
   ios.ram_wrlong(ios#sysmod,ios#SYSVAR,ios#RAMEND)                'Zeiger auf letzte freie Speicherzelle setzen
@@ -348,7 +369,13 @@ dlbox[w_sel].setview(w_view[1])
 info_print
 
 
-PRI f_view | n,stradr,ch,lch
+PRI f_view                                              'fkt: textdatei anzeigen
+
+  case w_sel
+    0: f_view0
+    1: f_view1
+
+PRI f_view0 | n,stradr,ch,lch                           'fkt: texdatei von sd anzeigen
 
   ios.winset(3)
   ios.curoff
@@ -370,7 +397,8 @@ PRI f_view | n,stradr,ch,lch
               ios.sdclose
               ios.printcls
               dlbox[0].redraw
-              dlbox[1].redraw
+              ifnot fl_full
+                dlbox[1].redraw
               return
         else
           lch := 0
@@ -387,7 +415,49 @@ PRI f_view | n,stradr,ch,lch
   dlbox[1].draw
   info_print
 
-PRI w0_clrlist | i
+
+PRI f_view1 | n,stradr,fn,len,ch,lch                   'fkt: textdatei von ramdrive anzeigen
+
+  ios.winset(3)
+  ios.curoff
+  ios.printcls
+
+  stradr := get_fname(w_view[w_sel] + w_pos[w_sel])
+  n := 1
+  lch := 0
+  fn := ios.rd_open(stradr)                             'datei öffnen
+  ifnot fn == -1
+    len := ios.rd_len(fn)
+    repeat len                                         'text ausgeben
+      ch := ios.printchar(ios.rd_get(fn))
+      if ch == ios#CHAR_NL OR ch == $0a                 'CR or NL
+        if ch == lch OR (lch <> ios#CHAR_NL AND lch <> $0a)
+          ios.printnl
+          lch := ch
+          if ++n == (fm#W3Y2 - 2)
+            n := 1
+            if ios.keywait == "q"
+              ios.rd_close(fn)
+              ios.printcls
+              dlbox[0].redraw
+              ifnot fl_full
+                dlbox[1].redraw
+              return
+        else
+          lch := 0
+      else
+        ios.printchar(ch)
+        lch := ch
+  ios.print(string(13,"[EOF]"))
+  ios.keywait
+  ios.sdclose                                           'datei schließen
+
+  ios.printcls
+  dlbox[0].draw
+  dlbox[1].draw
+  info_print
+
+PRI w0_clrlist | i                                      'fenster 0: dateiliste löschen
 
   i := 0
   repeat fm#MAX_FILES
@@ -400,7 +470,7 @@ PRI w0_clrlist | i
     i++
 
 
-PRI w1_clrlist | i
+PRI w1_clrlist | i                                      'fenster 1: dateiliste löschen
 
   i := 0
   repeat fm#MAX_FILES
@@ -412,7 +482,7 @@ PRI w1_clrlist | i
     w1_list[i] := " "
     i++
 
-PRI w0_readdir | stradr,i,j
+PRI w0_readdir | stradr,i,j                             'fenster 0: dateiliste einlesen
 
   i := 0
   ios.sddir
@@ -429,10 +499,11 @@ PRI w0_readdir | stradr,i,j
 
   w0_number := i
 
-PRI w1_readdir | stradr,i,j
+PRI w1_readdir | stradr,i,j                             'fenster 1: dateiliste einlesen
 
   i := 0
   ios.rd_dir
+  ios.rd_next 'ramdrive-label überspringen
   repeat while (stradr := ios.rd_next)
     j := 0
     repeat fm#MAX_LEN
@@ -442,7 +513,7 @@ PRI w1_readdir | stradr,i,j
     w1_len[i] := ios.rd_dlen
   w1_number := i
 
-PRI get_fname(fnr):adrdat | i,stradr
+PRI get_fname(fnr):adrdat | i,stradr                    'datei: dateinamen aus liste holrn
 
   i := fm#MAX_LEN * fnr
   case w_sel
@@ -456,7 +527,7 @@ PRI get_fname(fnr):adrdat | i,stradr
   fname[i] := 0
   return @fname
 
-PRI load(stradr) | len,fnr,i
+PRI load(stradr) | len,fnr,i                            'datei: datei --> ramdrive
 
   ifnot ios.sdopen("r",stradr)            'datei öffnen
     len := ios.sdfattrib(ios#F_SIZE)
@@ -468,7 +539,7 @@ PRI load(stradr) | len,fnr,i
     ios.sdclose
     ios.rd_close(fnr)
 
-PRI save(stradr) | fnr,len,i
+PRI save(stradr) | fnr,len,i                            'datei: ramdrive --> datei
 
   fnr := ios.rd_open(stradr)
   ifnot fnr == -1
@@ -481,7 +552,7 @@ PRI save(stradr) | fnr,len,i
     ios.rd_close(fnr)
 
 
-PRI frame_draw
+PRI frame_draw                                          'screen: bildschirmmaske ausgeben
 
   ios.winset(0)
   ios.curoff
@@ -498,7 +569,7 @@ PRI frame_draw
   ios.printq(string(" 1: View | 2: Del | 3: SD>>RAM ◀▶ 4: SD<<RAM | 5: RAM Clear     "))
   ios.setcolor(fm#COL_DEFAULT)
 
-PRI info_print | pos,len
+PRI info_print | pos,len                                'screen: infozeile ausgeben
 
   pos := w_view[w_sel] + w_pos[w_sel]
   case w_sel
@@ -521,7 +592,7 @@ PRI info_print | pos,len
   ios.printdec(ios.ram_getfree)
   ios.print(string(" Bytes free"))
 
-PRI testvideo                                          'passt div. variablen an videomodus an
+PRI testvideo                                           'screen: passt div. variablen an videomodus an
 
   vidmod := ios.belgetspec & 1
   rows := ios.belgetrows                                'zeilenzahl bei bella abfragen
@@ -531,13 +602,15 @@ PRI pause(sec)
 
   waitcnt(cnt+clkfreq*sec)
 
-DAT
+DAT                                                     'strings
 
 str1    byte  "Dateien löschen?",0
 str2    byte  "Ja",0
 str3    byte  "Nein",0
 str4    byte  "RAMDrive löschen?",0
 str5    byte  "SD-Card mounten?",0
+str6    byte  0
+str7    byte  "Programm beenden?",0
 
 DAT
      
