@@ -2482,6 +2482,21 @@ DAT
 
   strNVRAMFile byte  "nvram.sav",0                      'contains the 56 bytes of NVRAM, if RTC is not available
 
+PRI lan_txflush | handleidx
+''funktionsgruppe               : lan
+''funktion                      : Warten, bis Sendepuffer geleert ist
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [070][get.handleidx][put.ok]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : ok        - Sendepuffer leer (Wert egal)
+
+  handleidx := bus_getchar
+
+  sock.flush(sockhandle[handleidx])
+
+  bus_putchar(TRUE)
+
 PRI lan_start | hiveid, hivestr, strpos, macpos, i, a
 ''funktionsgruppe               : lan
 ''funktion                      : Netzwerk starten
@@ -2586,20 +2601,34 @@ PRI lan_connect | ipaddr, remoteport, handle, handleidx, i
 PRI lan_listen | port, handle, handleidx, i
 ''funktionsgruppe               : lan
 ''funktion                      : Port für eingehende TCP-Verbindung öffnen
+''                                bei bereits bestehendem Socket nur handleidx zurücksenden
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [074][sub_getword.port][put.handleidx]
+''busprotokoll                  : [074][get.handleidx][sub_getword.port][put.handleidx]
+''                              : handleidx  - lfd. Nr. der bestehenden Verbindung ($FF wenn neu)
 ''                              : port       - zu öffnende Portnummer
 ''                              : handleidx  - lfd. Nr. der Verbindung (index des kompletten handle)
 
+  handleidx := bus_getchar
   port := sub_getword
 
-    'freien Pufferabschnitt suchen
+  if handleidx <> $FF                         'bestehender (kein neuer) Socket
+    if sock.isValidHandle(sockhandle[handleidx]) 'Socket gültig
+      bus_putchar(handleidx)                     'alten handleidx zurücksenden
+      return
+
   i := 0
-  repeat sock#sNumSockets
-    if bufidx[i] == $FF  '0xFF: nicht zugewiesen
-      quit
-    i++
+  if handleidx == $FF    'neue Verbindung
+    repeat sock#sNumSockets
+    'freien Pufferabschnitt suchen
+      if bufidx[i] == $FF  '0xFF: nicht zugewiesen
+        quit
+      i++
+  else                   'bereits aufgebaute, abgebrochende Verbindung
+    repeat sock#sNumSockets
+      if bufidx[i] == handleidx  'zum Handle gehörender Buffer
+        quit
+      i++
 
   ifnot (handle := sock.listen(port, @bufmain[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
     handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
@@ -2642,9 +2671,10 @@ PRI lan_close | handleidx, i
   'reservierten Pufferabschnitt freigeben
   i := 0
   repeat sock#sNumSockets
-    if bufidx[i++] == handleidx  '0xFF: nicht zugewiesen
-      bufidx[i++] := $FF
+    if bufidx[i] == handleidx  '0xFF: nicht zugewiesen
+      bufidx[i] := $FF
       quit
+    i++
 
 
 PRI lan_rxtime | handleidx, timeout, t, rxbyte

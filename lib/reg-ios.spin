@@ -1036,6 +1036,19 @@ PUB rtcTest: available                                  'Test if RTC Chip is ava
 
 CON ''------------------------------------------------- LAN_FUNKTIONEN
 
+PUB lan_txflush(handleidx)
+''funktionsgruppe               : lan
+''funktion                      : Warten, bis Sendepuffer geleert ist
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [070][put.handleidx][get.ok]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : ok        - Sendepuffer leer (Wert egal)
+
+  bus_putchar1(gc#a_lanTXFlush)
+  bus_putchar1(handleidx)
+  bus_getchar1
+
 PUB lanstart                                            'LAN starten
 ''funktionsgruppe               : lan
 ''funktion                      : Netzwerk starten
@@ -1075,16 +1088,18 @@ PUB lan_connect(ipaddr, remoteport): handleidx
   bus_putword1(remoteport)
   handleidx := bus_getchar1
 
-PUB lan_listen(port): handleidx
+PUB lan_listen(oldhandleidx, port): handleidx
 ''funktionsgruppe               : lan
 ''funktion                      : Port für eingehende TCP-Verbindung öffnen
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [074][sub_putword.port][get.handleidx]
-''                              : port       - zu öffnende Portnummer
-''                              : handleidx  - lfd. Nr. der Verbindung (index des kompletten handle)
+''busprotokoll                  : [074][put.handleidx][sub_putword.port][get.handleidx]
+''                              : oldhandleidx  - lfd. Nr. der bestehenden Verbindung ($FF wenn neu)
+''                              : port          - zu öffnende Portnummer
+''                              : handleidx     - lfd. Nr. der Verbindung (index des kompletten handle)
 
   bus_putchar1(gc#a_lanListen)
+  bus_putchar1(oldhandleidx)
   bus_putword1(port)
   handleidx := bus_getchar1
 
