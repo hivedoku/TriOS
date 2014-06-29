@@ -41,7 +41,15 @@ CON
 _CLKMODE     = XTAL1 + PLL16X
 _XINFREQ     = 5_000_000
 
-#define __DEBUG
+CON 'NVRAM Konstanten --------------------------------------------------------------------------
+
+#4,     NVRAM_IPADDR
+#24,    NVRAM_HIVE       ' 4 Bytes
+
+DAT
+
+  strNVRAMFile byte  "nvram.sav",0                      'contains the 56 bytes of NVRAM, if RTC is not available
+
 
 VAR
 
@@ -49,6 +57,10 @@ VAR
 
   byte reqstr[32]            ' request string
   byte webbuff[128]          ' incoming header buffer
+
+  byte rtcAvailable
+
+  long hiveid
 
   long cog, random_value
 
@@ -70,10 +82,12 @@ PUB main
   ios.lanstart                                            'LAN-Treiber initialisieren (eigene IP-Adresse usw. setzen)
   handleidx := $FF
 
-#ifdef __DEBUG
-  ios.print(@strWaitConnection)
-#endif
+  getcfg
+  ios.print(@strMsgEnd)
+
   repeat
+    if ios.keystat > 0
+      quit
     if (handleidx := ios.lan_listen(handleidx,80)) == $FF 'Empfangs-Socket auf Port 80 öffnen
       ios.print(@strErrorNoSock)
       quit
@@ -110,11 +124,15 @@ PRI webThread | i, j, uri, args
     sendStr(@ajaxjs)
   elseif indexOf(@reqstr, string("rand.cgi")) <> -1                         ' rand.cgi
     sendStr(str.trimCharacters(num.ToStr(long[rr_random_ptr], num#DEC)))
+  elseif indexOf(@reqstr, string("id.cgi")) <> -1                           ' id.cgi
+    sendStr(str.trimCharacters(num.ToStr(hiveid, num#DEC)))
   elseif indexOf(@reqstr, string("img.bin")) <> -1                          ' img.bin
     ios.lan_txdata(handleidx, 0, 32768)
   else
     ' default page
-    sendStr(string("<html><body><script language=javascript src=ajax.js></script><b>It Works!<br><br>Random Number:</b><div id=a></div><script language=javascript>ajax('rand.cgi', 'a', 10);</script></body></html>"))
+    sendStr(@strDefPage1)
+    sendStr(str.trimCharacters(num.ToStr(hiveid, num#DEC)))
+    sendStr(@strDefPage2)
 
   return 0
 
@@ -152,6 +170,109 @@ PRI indexOf(haystack, needle) | i, j
       return i
 
   return -1
+
+PRI getcfg                                          'nvram: IP-Konfiguration anzeigen
+
+  if ios.rtcTest                                        'RTC chip available?
+    rtcAvailable := TRUE
+  else                                                  'use configfile
+    rtcAvailable := FALSE
+    ios.sddmset(ios#DM_USER)                            'u-marker setzen
+    ios.sddmact(ios#DM_SYSTEM)                          's-marker aktivieren
+    if ios.sdopen("R",@strNVRAMFile)
+      ios.print(@strErrorOpen)
+      ios.sddmact(ios#DM_USER)                          'u-marker aktivieren
+      return
+
+  ios.print(@strAddr)
+  listaddr(NVRAM_IPADDR)
+  ios.printnl
+
+  if rtcAvailable
+    hiveid := ios.getNVSRAM(NVRAM_HIVE)
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+1) << 8
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+2) << 16
+    hiveid += ios.getNVSRAM(NVRAM_HIVE+3) << 24
+  else
+    ios.sdseek(NVRAM_HIVE)
+    hiveid := ios.sdgetc
+    hiveid += ios.sdgetc << 8
+    hiveid += ios.sdgetc << 16
+    hiveid += ios.sdgetc << 24
+
+  ifnot rtcAvailable
+    ios.sdclose
+    ios.sddmact(ios#DM_USER)                            'u-marker aktivieren
+
+PRI listaddr (nvidx) | count                            'IP-Adresse anzeigen
+
+  ifnot rtcAvailable
+    ios.sdseek(nvidx)
+
+  repeat count from 0 to 3
+    if(count)
+      ios.print(string("."))
+    if rtcAvailable
+      ios.print(str.trimCharacters(num.ToStr(ios.getNVSRAM(nvidx+count), num#DEC)))
+    else
+      ios.print(str.trimCharacters(num.ToStr(ios.sdgetc, num#DEC)))
+
+DAT ' Locale
+
+#ifdef __LANG_EN
+  'locale: english
+
+  strNoNetwork      byte 13,"Administra doesn't provide network functions!",13,"Please load admnet.",13,0
+  strWaitConnection byte "Waiting for client connection...",13,0
+  strConnected      byte "Client connected...",13,0
+  strErrorNoSock    byte "No free socket.",13,0
+  strErrorOpen byte "Can't open configuration file",13,0
+  strAddr           byte 13,"Webserver startet, please use this URL to connect:",13,"  http://",0
+  strDefPage1       byte "<html><body><script language=javascript src=ajax.js></script><b>It Works!<br><br>Hive-ID: ",0
+  strDefPage2       byte "<br><br>Random Number:</b><div id=a></div><script language=javascript>ajax('rand.cgi', 'a', 10);</script></body></html>",0
+  strMsgEnd         byte 13,13,"Press any key to quit",13,0
+
+
+#else
+  'default locale: german
+
+  strNoNetwork      byte 13,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",13,"Bitte admnet laden.",13,0
+  strWaitConnection byte "Warte auf Client-Verbindung...",13,0
+  strConnected      byte "Client verbunden...",13,0
+  strErrorNoSock    byte "Kein Socket frei...",13,0
+  strErrorOpen      byte "Kann Konfigurationsdatei nicht öffnen.",13,0
+  strAddr           byte 13,"Webserver gestartet, zum Verbinden folgende URL verwenden:",13,"  http://",0
+  strDefPage1       byte "<html><body><script language=javascript src=ajax.js></script><b>Es funktioniert!<br><br>Hive-ID: ",0
+  strDefPage2       byte "<br><br>Zufallszahl:</b><div id=a></div><script language=javascript>ajax('rand.cgi', 'a', 10);</script></body></html>",0
+  strMsgEnd         byte 13,13,"Zum Beenden beliebige Taste drücken",13,0
+
+#endif
+
+ajaxjs  byte  "var ajaxBusy=false;function ajax(a,b,c){if(ajaxBusy){return}ajaxBusy=true;var d;try{d=new XMLHttpRequest()}catch(e){d=new ActiveXObject('Microsoft.XMLHTTP')}var f=function(){if(d.readyState==4){if(b){document.getElementById(b).innerHTML=d.responseText}ajaxBusy=false;if(c>0){setTimeout('ajax(\''+a+'\',\''+b+'\','+c+')',c)}}};d.open('GET',a+'?'+(new Date()).getTime(),true);d.onreadystatechange=f;d.send(null)}"
+        byte  0
+
+DAT                                                     'lizenz
+
+{{
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                   TERMS OF USE: MIT License                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    │
+│files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy,    │
+│modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software│
+│is furnished to do so, subject to the following conditions:                                                                   │
+│                                                                                                                              │
+│The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.│
+│                                                                                                                              │
+│THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE          │
+│WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR         │
+│COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   │
+│ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+}}
+
+
 
 DAT
 {{
@@ -268,47 +389,3 @@ entry                   movi    ctra,#%00001_111        'set ctra to internal pl
 
 _random_value           res     1
 
-DAT
-ajaxjs  byte  "var ajaxBusy=false;function ajax(a,b,c){if(ajaxBusy){return}ajaxBusy=true;var d;try{d=new XMLHttpRequest()}catch(e){d=new ActiveXObject('Microsoft.XMLHTTP')}var f=function(){if(d.readyState==4){if(b){document.getElementById(b).innerHTML=d.responseText}ajaxBusy=false;if(c>0){setTimeout('ajax(\''+a+'\',\''+b+'\','+c+')',c)}}};d.open('GET',a+'?'+(new Date()).getTime(),true);d.onreadystatechange=f;d.send(null)}"
-        byte  0
-
-DAT ' Locale
-
-#ifdef __LANG_EN
-  'locale: english
-
-  strNoNetwork      byte 13,"Administra doesn't provide network functions!",13,"Please load admnet.",13,0
-  strWaitConnection byte "Waiting for client connection...",13,0
-  strConnected      byte "Client connected...",13,0
-  strErrorNoSock    byte "No free socket.",13,0
-
-#else
-  'default locale: german
-
-  strNoNetwork      byte 13,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",13,"Bitte admnet laden.",13,0
-  strWaitConnection byte "Warte auf Client-Verbindung...",13,0
-  strConnected      byte "Client verbunden...",13,0
-  strErrorNoSock    byte "Kein Socket frei...",13,0
-
-#endif
-
-DAT                                                     'lizenz
-     
-{{
-
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                   TERMS OF USE: MIT License                                                  │                                                            
-├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    │ 
-│files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy,    │
-│modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software│
-│is furnished to do so, subject to the following conditions:                                                                   │
-│                                                                                                                              │
-│The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.│
-│                                                                                                                              │
-│THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE          │
-│WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR         │
-│COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   │
-│ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-}}
