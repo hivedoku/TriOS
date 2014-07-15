@@ -64,7 +64,7 @@ VAR
 
   long cog, random_value
 
-PUB main
+PUB main | i
 
   rr_start
 
@@ -85,16 +85,19 @@ PUB main
   getcfg
   ios.print(@strMsgEnd)
 
+  i := 0
   repeat
     if ios.keystat > 0
       quit
     if (handleidx := ios.lan_listen(handleidx,80)) == $FF 'Empfangs-Socket auf Port 80 öffnen
-      ios.print(@strErrorNoSock)
-      quit
+      if i > 20
+        ios.print(@strErrorNoSock)
+        quit
+      else
+        i++
+        next
+    i := 0
     if ios.lan_isconnected(handleidx)                     'bei bestehender Verbindung...
-#ifdef __DEBUG
-      ios.print(@strConnected)
-#endif
       if webThread == 0
         ios.lan_txflush(handleidx)
       ios.lan_close(handleidx)
@@ -224,7 +227,6 @@ DAT ' Locale
 
   strNoNetwork      byte 13,"Administra doesn't provide network functions!",13,"Please load admnet.",13,0
   strWaitConnection byte "Waiting for client connection...",13,0
-  strConnected      byte "Client connected...",13,0
   strErrorNoSock    byte "No free socket.",13,0
   strErrorOpen byte "Can't open configuration file",13,0
   strAddr           byte 13,"Webserver startet, please use this URL to connect:",13,"  http://",0
@@ -238,7 +240,6 @@ DAT ' Locale
 
   strNoNetwork      byte 13,"Administra stellt keine Netzwerk-Funktionen zur Verfügung!",13,"Bitte admnet laden.",13,0
   strWaitConnection byte "Warte auf Client-Verbindung...",13,0
-  strConnected      byte "Client verbunden...",13,0
   strErrorNoSock    byte "Kein Socket frei...",13,0
   strErrorOpen      byte "Kann Konfigurationsdatei nicht öffnen.",13,0
   strAddr           byte 13,"Webserver gestartet, zum Verbinden folgende URL verwenden:",13,"  http://",0
