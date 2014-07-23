@@ -204,7 +204,8 @@ A_BLT           = %00000000_00000000_00001000_00000000
         a_DCF_GetYear      '77
 
 '       ----------------------------------------------  LAN-FUNKTIONEN
-#81,    a_lanStart                                      'Start Network
+#80,    a_lanTXFlush                                    'Warten, bis Sendepuffer geleert ist
+        a_lanStart                                      'Start Network
         a_lanStop                                       'Stop Network
         a_lanConnect                                    'ausgehende TCP-Verbindung öffnen
         a_lanListen                                     'auf eingehende TCP-Verbindung lauschen

@@ -2480,6 +2480,21 @@ DAT
 
   strNVRAMFile byte  "nvram.sav",0                      'contains the 56 bytes of NVRAM, if RTC is not available
 
+PRI lan_txflush | handleidx
+''funktionsgruppe               : lan
+''funktion                      : Warten, bis Sendepuffer geleert ist
+''eingabe                       : -
+''ausgabe                       : -
+''busprotokoll                  : [070][get.handleidx][put.ok]
+''                              : handleidx - lfd. Nr. der Verbindung
+''                              : ok        - Sendepuffer leer (Wert egal)
+
+  handleidx := bus_getchar
+
+  \sock.flush(sockhandle[handleidx])
+
+  bus_putchar(TRUE)
+
 PRI lan_start | hiveid, hivestr, strpos, macpos, i, a
 ''funktionsgruppe               : lan
 ''funktion                      : Netzwerk starten
@@ -2537,7 +2552,7 @@ PRI lan_start | hiveid, hivestr, strpos, macpos, i, a
       byte[hivestr+strpos] := 0
       macpos--
 
-    sock.start(A_NETCS,A_NETSCK,A_NETSI,A_NETSO, -1, @mac_addr, @ip_addr)
+    \sock.start(A_NETCS,A_NETSCK,A_NETSI,A_NETSO, -1, @mac_addr, @ip_addr)
     lan_started := true
 
 
@@ -2549,7 +2564,7 @@ PRI lan_stop
 ''busprotokoll                  : [072]
 
   if lan_started
-    sock.stop
+    \sock.stop
     lan_started := false
 
 PRI lan_connect | ipaddr, remoteport, handle, handleidx, i
@@ -2572,8 +2587,8 @@ PRI lan_connect | ipaddr, remoteport, handle, handleidx, i
       quit
     i++
 
-  ifnot (handle := sock.connect(ipaddr, remoteport, @bufmain[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
-    sock.resetBuffers(handle)
+  ifnot (handle := \sock.connect(ipaddr, remoteport, @bufmain[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
+    \sock.resetBuffers(handle)
     handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
     sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
     bufidx[i] :=handleidx
@@ -2584,22 +2599,36 @@ PRI lan_connect | ipaddr, remoteport, handle, handleidx, i
 PRI lan_listen | port, handle, handleidx, i
 ''funktionsgruppe               : lan
 ''funktion                      : Port für eingehende TCP-Verbindung öffnen
+''                                bei bereits bestehendem Socket nur handleidx zurücksenden
 ''eingabe                       : -
 ''ausgabe                       : -
-''busprotokoll                  : [074][sub_getword.port][put.handleidx]
+''busprotokoll                  : [074][get.handleidx][sub_getword.port][put.handleidx]
+''                              : handleidx  - lfd. Nr. der bestehenden Verbindung ($FF wenn neu)
 ''                              : port       - zu öffnende Portnummer
 ''                              : handleidx  - lfd. Nr. der Verbindung (index des kompletten handle)
 
+  handleidx := bus_getchar
   port := sub_getword
 
-    'freien Pufferabschnitt suchen
-  i := 0
-  repeat sock#sNumSockets
-    if bufidx[i] == $FF  '0xFF: nicht zugewiesen
-      quit
-    i++
+  if handleidx <> $FF                         'bestehender (kein neuer) Socket
+    if \sock.isValidHandle(sockhandle[handleidx]) 'Socket gültig
+      bus_putchar(handleidx)                     'alten handleidx zurücksenden
+      return
 
-  ifnot (handle := sock.listen(port, @bufmain[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
+  i := 0
+  if handleidx == $FF    'neue Verbindung
+    repeat sock#sNumSockets
+    'freien Pufferabschnitt suchen
+      if bufidx[i] == $FF  '0xFF: nicht zugewiesen
+        quit
+      i++
+  else                   'bereits aufgebaute, abgebrochende Verbindung
+    repeat sock#sNumSockets
+      if bufidx[i] == handleidx  'zum Handle gehörender Buffer
+        quit
+      i++
+
+  ifnot (handle := \sock.listen(port, @bufmain[i*rxlen], rxlen, @buftx[i*txlen], txlen)) == -102
     handleidx := handle.byte[0]         'extract the handle index from the lower 8 bits
     sockhandle[handleidx] := handle     'komplettes handle zu handle index speichern
     bufidx[i] :=handleidx
@@ -2621,7 +2650,7 @@ PRI lan_waitconntimeout | handleidx, timeout, t, connected
   timeout := sub_getword
 
   t := cnt
-  repeat until (connected := sock.isConnected(sockhandle[handleidx])) or (((cnt - t) / (clkfreq / 1000)) > timeout)
+  repeat until (connected := \sock.isConnected(sockhandle[handleidx])) or (((cnt - t) / (clkfreq / 1000)) > timeout)
 
   bus_putchar(connected)
 
@@ -2635,14 +2664,15 @@ PRI lan_close | handleidx, i
 
   handleidx := bus_getchar
 
-  sock.close(sockhandle[handleidx])
+  \sock.close(sockhandle[handleidx])
 
   'reservierten Pufferabschnitt freigeben
   i := 0
   repeat sock#sNumSockets
-    if bufidx[i++] == handleidx  '0xFF: nicht zugewiesen
-      bufidx[i++] := $FF
+    if bufidx[i] == handleidx  '0xFF: nicht zugewiesen
+      bufidx[i] := $FF
       quit
+    i++
 
 
 PRI lan_rxtime | handleidx, timeout, t, rxbyte
@@ -2661,7 +2691,7 @@ PRI lan_rxtime | handleidx, timeout, t, rxbyte
   timeout := sub_getword
 
   t := cnt
-  repeat until (rxbyte := sock.readByteNonBlocking(sockhandle[handleidx])) => 0 or (not sock.isConnected(sockhandle[handleidx])) or (cnt - t) / (clkfreq / 1000) > timeout
+  repeat until (rxbyte := \sock.readByteNonBlocking(sockhandle[handleidx])) => 0 or (not \sock.isConnected(sockhandle[handleidx])) or (cnt - t) / (clkfreq / 1000) > timeout
 
   bus_putchar(rxbyte)
 
@@ -2681,8 +2711,8 @@ PRI lan_rxdata | handleidx, len, rxbyte, error
 
   repeat len
     ifnot error
-      repeat while (rxbyte := sock.readByteNonBlocking(sockhandle[handleidx])) < 0
-        ifnot sock.isConnected(sockhandle[handleidx])
+      repeat while (rxbyte := \sock.readByteNonBlocking(sockhandle[handleidx])) < 0
+        ifnot \sock.isConnected(sockhandle[handleidx])
           error := sock#ERRSOCKETCLOSED
           quit
     bus_putchar(rxbyte)
@@ -2706,8 +2736,8 @@ PRI lan_txdata | handleidx, len, txbyte, error
   repeat len
     txbyte := bus_getchar
     ifnot error
-      repeat while sock.writeByteNonBlocking(sockhandle[handleidx], txbyte) < 0
-        ifnot sock.isConnected(sockhandle[handleidx])
+      repeat while \sock.writeByteNonBlocking(sockhandle[handleidx], txbyte) < 0
+        ifnot \sock.isConnected(sockhandle[handleidx])
           error := sock#ERRSOCKETCLOSED
           quit
 
@@ -2724,7 +2754,7 @@ PRI lan_rxbyte
 ''                              : rxbyte    - empfangenes Zeichen oder
 ''                              :             sock#RETBUFFEREMPTY (-1) wenn kein Zeichen vorhanden
 
-  bus_putchar(sock.readByteNonBlocking(sockhandle[bus_getchar]))
+  bus_putchar(\sock.readByteNonBlocking(sockhandle[bus_getchar]))
 
 PRI lan_isconnected
 ''funktionsgruppe               : lan
@@ -2735,7 +2765,7 @@ PRI lan_isconnected
 ''                              : handleidx - lfd. Nr. der Verbindung
 ''                              : connected - TRUE wenn verbunden, sonst FALSE
 
-  bus_putchar(sock.isConnected(sockhandle[bus_getchar]))
+  bus_putchar(\sock.isConnected(sockhandle[bus_getchar]))
 
 DAT
                 long                                    ' long alignment for addresses
