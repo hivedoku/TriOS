@@ -64,7 +64,7 @@ VAR
 
   long cog, random_value
 
-PUB main | i
+PUB main
 
   rr_start
 
@@ -85,23 +85,16 @@ PUB main | i
   getcfg
   ios.print(@strMsgEnd)
 
-  i := 0
   repeat
     if ios.keystat > 0
+      ios.key
       quit
-    if (handleidx := ios.lan_listen(handleidx,80)) == $FF 'Empfangs-Socket auf Port 80 öffnen
-      if i > 20
-        ios.print(@strErrorNoSock)
-        quit
-      else
-        i++
-        next
-    i := 0
-    if ios.lan_isconnected(handleidx)                     'bei bestehender Verbindung...
-      if webThread == 0
-        ios.lan_txflush(handleidx)
-      ios.lan_close(handleidx)
-      handleidx := $FF
+    if (handleidx := ios.lan_listen(handleidx,80)) <> $FF 'Empfangs-Socket auf Port 80 öffnen
+      if ios.lan_isconnected(handleidx)                     'bei bestehender Verbindung...
+        if webThread == 0
+          ios.lan_txflush(handleidx)
+        ios.lan_close(handleidx)
+        handleidx := $FF
 
   ios.stop
 
