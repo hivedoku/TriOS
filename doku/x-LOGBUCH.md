@@ -1,19 +1,21 @@
-r57 - xx-xx-xxxx-joergd
-=======================
+r57-nw1.5 - 23-07-2014-joergd
+=============================
 
 Allgemein:
  - alle Spin-Dateien verwenden einheitlich UTF8-Kodierung und ein Zeilenende
    mit Linefeed (LF)
 
 Administra:
- - Netzwerk-fähig
  - nur eine Source-Datei für alle Binaries, Funktionsauswahl über Defines
- - Plexbus, DCF77 und Bluetooth aus Basic/Plexus hinzugefügt
+ - DCF77 und Bluetooth aus Basic/Plexus hinzugefügt
 
 Netzwerk-Clients:
  - ipconfig
  - FTP-Client
  - IRC-Client
+
+Netzwerk-Server:
+ - Webserver (Demo)
 
 fm, man:
  - Textdateien mit unterschiedlichem Zeilenende (CR, LF) werden unterstützt
@@ -26,22 +28,67 @@ Make-Scripts:
  - Linux-Version (make.sh)
  - Erstellung verschiedener Anministra-Binaries per Defines
  - Erstellung beider Regime-Flash-Versionen (mit und ohne Forth)
+ - Release-Script
+
+
+r57 - 21-06-2014-dr235
+======================
+
+admflash:
+ - Plexbusroutinen eingefügt
+ - sd_del - Heartbeat-Sound angepasst
+
+belflash:
+ - per Compilerflag wählbare Monitorsettings eingefügt (57/60hz)
+
+basic.mod (propforth):
+ - Bei der Installation von TriOS mit Forth muss basic.mod nur noch eingefügt
+   werden, damit wird automatisch geflasht und neu gestartet
+
+lib:
+ - adm-enc28j60 eingefügt, Treiber Netzwerkchip
+ - adm-socket eingefügt, Netzwerksocket
+ - adm-plx Code ausgebaut
+ - bel-vga Monitorsettings
+ - glob-con Plexbus/LAN-Konstanten eingefügt
+ - glob-led-engine - neue lib für hbeat-led-pwm
+ - gui-dlbox - Redraw beschleunigt
+ - gui-wbox - Warnbox ist jetzt auch mit tab & esc bedienbar
+ - m-glob-con - konstanten für sound und plexbus eingefügt
+
+reg-ios:
+ - Testfunktion für RTC
+ - LAN-Funktionen eingefügt
+ - Plexbus Funktionen eingefügt
+ - printblk - Stringausgabe mit Längenangabe
+
+system/administra:
+ - admnet eingefügt
+
+system/regnatix:
+ - fm - Optimierungen und Detailverbesserungen
+ - perplex - Plexbus Tool zugefügt
+ - regime - sysinfo zeigt jetzt auch Devices am Plexbus an
+ - man - Systemklänge angepasst, damit nicht ständig der Heartbeat beim Lesen
+   läuft
+ - ramtest - Anpassungen Maske/Farben
+
+Dokumentation:
+ - Neustrukturierung der Texte
+
 
 
 r56 - 11-05-2013-dr235
 ======================
 
 und weiter gehts mit dem Frühjahresputz:
-
  - umstellung Administra-Codes (admflash, admay, admsid) auf externe
    Konstantendefinitionen
 
 belflash:
-
  - fehler im loader behoben
 
 lib:
-
  - gui-objekte für textoberfläche eingefügt:
 
    gui-dlbox     - Listenbox für Dateien
@@ -50,7 +97,6 @@ lib:
    gui-wbox      - Warnbox mit Auswahloptionen
 
 system/regnatix:
-
  - Filemanager fm zugefügt
  - Mental-Loader m zugefügt
  - Tool zum erstellen von tapes (mental-containerdateien) zugefügt
@@ -58,7 +104,6 @@ system/regnatix:
  - yplay: Konstanten ausgelagert
 
 system/sonstiges:
-
  - Manual zugefügt: error, fm
 
 

@@ -1,7 +1,7 @@
 #! /bin/sh
 
 # Definitionen
-VERSION="57"
+VERSION="57-Network-1.5"
 
 # Pfade
 ARCHIV="HIVE-TriOS-R${VERSION}"
@@ -23,8 +23,9 @@ ${MAKE}
 # ----------------------------------------------------------------
 # Archive erstellen
 
-mkdir .tmp
+mkdir -p .tmp/doku
 for file in *.md ; do cp "$file" .tmp/"${file/.md}".txt ; done
+for file in doku/*.md ; do cp "$file" .tmp/"${file/.md}".txt ; done
 cd .tmp
 zip -r9 ../../${ARCHIV}-bin.zip *
 zip -r9 ../../${ARCHIV}-src.zip *

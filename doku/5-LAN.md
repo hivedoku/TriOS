@@ -10,6 +10,7 @@ Funktionen. Als erste Anwendungen sind enthalten:
  - Ein FTP-Client, welcher Dateien von einem FTP-Server downloaden und in der
    RAM-Disk im eRAM oder auf SD-Card abspeichern kann.
  - Ein vollständiger IRC-Client
+ - Die DEmo-Version eines Webservers
 Zukünftige Erweiterungen, wie die Integration in Regime und direktes Starten
 von Programmen aus dem Netzwerk sind geplant.
 
@@ -125,7 +126,18 @@ abgespeichert. Von dort könnte sie direkt gestartet werden.
 IRC-Client
 ----------
 
-siehe IRC-CLIENT.md
+siehe [6-IRC-CLIENT.md]
+
+Webserver
+---------
+
+Der Webserver wird aus Regime ohne Parameter gestartet:
+
+  websrv
+
+Damit ist der Hive mittels Browser unter seiter mittels ipconfig eingestellten
+Adresse erreichbar. Zur Demonstration wird die Hive-Id und eine sich ständig
+ändernde Zufallszahl angezeigt.
 
 
 Schlußbemerkung
