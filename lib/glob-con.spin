@@ -329,8 +329,22 @@ A_BLT           = %00000000_00000000_00001000_00000000
         a_s_beep
         a_s_dmpreg          '199                       'soundinformationen senden
 
-'       ----------------------------------------------  Eigene Erweiterungen
-'       200 ... 254                                     frei für eigene Erweiterungen
+'       ##############################################  mehrfach verwendete Funktionen
+'       200 ... 254                                     können mehrfach verwendet,
+'                                                       dürfen aber nur einmal
+'                                                       eingebunden werden
+
+'       ----------------------------------------------  Funktionsgenerator
+#210,   a_startFunctionGenerator
+        a_stopFunctionGenerator
+        a_PulseWidth
+        a_Frequency_HZ
+        a_Frequency_Centihz
+        a_SetWaveform
+        a_SetDampLevel
+        a_SetUserWaveform
+        a_setParameter
+
 
 CON 'BELLATRIX-FUNKTIONEN --------------------------------------------------------------------------
 

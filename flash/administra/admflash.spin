@@ -66,12 +66,13 @@ Funktion        : Dieser Code wird von  Administra nach einem Reset aus dem EEPr
                   - ein- und ausgehende Verbindungen öffnen
                   - Daten übertragen
 
-Komponenten     : HSS            1.2        Andrew Arsenault   Lizenz unklar
-                  SIDCog         Ver. 080   Johannes Ahlebrand MIT Lizenz
-                  DACEngine      01/11/2010 Kwabena W. Agyeman MIT Lizenz
-                  FATEngine      01/18/2009 Kwabena W. Agyeman MIT Lizenz
-                  RTCEngine      11/22/2009 Kwabena W. Agyeman MIT Lizenz
-                  PropTCP        12/08/2009 Harrison Pham      Lizenz unklar
+Komponenten     : HSS                        1.2           Andrew Arsenault   Lizenz unklar
+                  SIDCog                     Ver. 080      Johannes Ahlebrand MIT Lizenz
+                  DACEngine                  01/11/2010    Kwabena W. Agyeman MIT Lizenz
+                  FATEngine                  01/18/2009    Kwabena W. Agyeman MIT Lizenz
+                  RTCEngine                  11/22/2009    Kwabena W. Agyeman MIT Lizenz
+                  PropTCP                    12/08/2009    Harrison Pham      Lizenz unklar
+                  Propeller Signal Generator v1.2 (C) 2012 Johannes Ahlebrand Parallax Object Exchange License
 
 COG's           : MANAGMENT     1 COG
                   FAT/RTC       1 COG
@@ -90,7 +91,7 @@ Defines         : __ADM_FAT      enable FAT engine (sd card handling)
                   __ADM_SID      enable SID player
                   __ADM_LAN      enable LAN functions
                   __ADM_RTC      enable RTC functions (FAT engine inherits it also)
-                  __ADM_PLX      enable plexbus
+                  __ADM_PLX      enable Plexus functions
                   __ADM_DCF      enable DCF77 receiver
                   __ADM_BLT      enable Bluetooth
                   __ADM_COM      enable serial port
@@ -151,6 +152,7 @@ Logbuch         :
 17-04-2013-dr235  - konstanten für administra-funktionen komplett ausgelagert
 22-12-2013-joergd - LAN Funktionen
 17-12-2014-joergd - verschiedene Administra-Code-Versionen vereinheitlicht
+29-11-2014-joergd - Signalgenerator (von zille für Plexus)
 
 Kommandoliste   :
 
@@ -352,6 +354,7 @@ OBJ
 #endif
 #ifdef __ADM_PLX
   plx             : "adm-plx"        'PlexBux
+  signal          : "adm-signalgenerator"
 #endif
 #ifdef __ADM_DCF
   dcf             : "adm-dcf"        'DCF-77
@@ -559,6 +562,15 @@ PUB main | cmd,err                                      'chip: kommandointerpret
 '       ----------------------------------------------  Venatrix-Plexus
         gc#a_VexPut:    plx_put_vex                     'Register im Venatrix-Plexus schreiben
         gc#a_VexGet:    plx_get_vex                     'Register im Venatrix-Plexus lesen
+'       ----------------------------------------------  Funktionsgenerator
+        gc#a_StartFunctionGenerator: plx_startgenerator
+        gc#a_StopFunctionGenerator:  plx_stopgenerator
+        gc#a_PulseWidth:             signal.setPulseWidth(sub_getlong)
+        gc#a_Frequency_HZ:           signal.setFrequency(sub_getlong)
+        gc#a_Frequency_Centihz:      signal.setFrequencyCentiHertz(sub_getlong)
+        gc#a_SetWaveform:            signal.setWaveform(bus_getchar)
+        gc#a_SetDampLevel:           signal.setDampLevel(sub_getlong)
+        gc#a_SetParameter:           signal.setParameters(bus_getchar, sub_getlong, sub_getlong, sub_getlong)
 #endif '__ADM_PLX
 
 '       ----------------------------------------------  WAV-FUNKTIONEN
@@ -702,6 +714,8 @@ PRI init_chip | err,i,j                                 'chip: initialisierung d
   'plx-bus initialisieren
   plx.init                                              'defaultwerte setzen, poller-cog starten
   plx.run                                               'plexbus freigeben (poller läuft)
+
+  FunctionGenerator:=0                                  'Funktionsgenerator aus
 #endif '__ADM_PLX
 
 #ifdef __ADM_LAN
@@ -2379,6 +2393,11 @@ CON ''-------------------------------------------------  PLX-Funktionen
 
 #ifdef __ADM_PLX
 
+VAR
+
+  byte FunctionGenerator                                 'On/Off Marker Funktionsgenerator
+
+
 PRI plx_in | addr                                        'port einlesen
 
     addr := bus_getchar
@@ -2458,6 +2477,27 @@ PRI plx_get_vex | reg, addr                             'Register im Venatrix-Pl
     addr := bus_getchar               'device-adresse empfangen
     bus_putchar(plx.vexget(reg,addr))
 
+PRI plx_startgenerator
+
+    ifnot FunctionGenerator
+#ifdef __ADM_SID
+          sid1.stop
+          sid2.stop
+#endif '__ADM_SID
+          signal.start(gc#A_SOUNDL, gc#A_SOUNDR, 32)
+          FunctionGenerator:=1
+
+PRI plx_stopgenerator
+
+    if FunctionGenerator
+       signal.stop
+#ifdef __ADM_SID
+       'SID soundsystem initialisieren
+       sidreg1 := sid1.start(gc#A_SOUNDL,0)                  'erste sidcog starten, adresse der register speichern
+       waitcnt(cnt+(clkfreq>>8))                             '
+       sidreg2 := sid2.start(gc#A_SOUNDR,0)                  'zweite sidcog starten
+#endif '__ADM_SID
+       FunctionGenerator:=0
 
 CON ''------------------------------------------------- End of DCF77 FUNCTIONS
 
